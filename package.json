@@ -1,7 +1,7 @@
 {
   "name": "docstitch",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Prepare, arrange, and print document images on A4 pages.",
   "type": "module",
   "main": "electron/main.cjs",
