@@ -16,6 +16,7 @@ import {
   CircleDot,
   ZoomIn,
   ZoomOut,
+  Scan,
 } from "lucide-react";
 import type { UploadedDoc } from "../types";
 
@@ -1243,25 +1244,25 @@ export default function ImageEditor({
             ref={previewAreaRef}
             className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-slate-100"
           >
-            <div className="absolute left-3 top-3 z-20 flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 p-1 shadow-sm backdrop-blur">
+            <div className="absolute left-3 top-3 z-20 flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white/95 p-0.5 shadow-sm backdrop-blur">
               <button
                 type="button"
                 onClick={() => setZoom((value) => Math.max(0.5, Math.round((value - 0.25) * 100) / 100))}
                 disabled={zoom <= 0.5}
                 aria-label="Zoom out"
                 title="Zoom out"
-                className="flex h-8 w-8 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <ZoomOut className="h-4 w-4" />
+                <ZoomOut className="h-3.5 w-3.5" />
               </button>
               <button
                 type="button"
                 onClick={() => setZoom(1)}
                 aria-label="Reset zoom"
                 title="Reset zoom"
-                className="min-w-12 rounded-md px-1 py-1.5 text-xs font-semibold tabular-nums text-slate-600 hover:bg-slate-100"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"
               >
-                {Math.round(zoom * 100)}%
+                <Scan className="h-3.5 w-3.5" />
               </button>
               <button
                 type="button"
@@ -1269,36 +1270,36 @@ export default function ImageEditor({
                 disabled={zoom >= 3}
                 aria-label="Zoom in"
                 title="Zoom in"
-                className="flex h-8 w-8 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <ZoomIn className="h-4 w-4" />
+                <ZoomIn className="h-3.5 w-3.5" />
               </button>
             </div>
             <div
-              className="absolute right-6 top-3 z-20 flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 p-1 shadow-sm backdrop-blur"
+              className="absolute right-6 top-3 z-20 flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white/95 p-0.5 shadow-sm backdrop-blur"
               role="toolbar"
               aria-label="Image transform controls"
             >
               <CanvasToolButton
                 onClick={() => setRotation((value) => (value - 90 + 360) % 360)}
                 label="Rotate left"
-                icon={<RotateCcw className="h-4 w-4" />}
+                icon={<RotateCcw className="h-3.5 w-3.5" />}
               />
               <CanvasToolButton
                 onClick={() => setRotation((value) => (value + 90) % 360)}
                 label="Rotate right"
-                icon={<RotateCw className="h-4 w-4" />}
+                icon={<RotateCw className="h-3.5 w-3.5" />}
               />
               <CanvasToolButton
                 onClick={() => setFlipH((value) => !value)}
                 label="Flip horizontal"
-                icon={<FlipHorizontal className="h-4 w-4" />}
+                icon={<FlipHorizontal className="h-3.5 w-3.5" />}
                 active={flipH}
               />
               <CanvasToolButton
                 onClick={() => setFlipV((value) => !value)}
                 label="Flip vertical"
-                icon={<FlipVertical className="h-4 w-4" />}
+                icon={<FlipVertical className="h-3.5 w-3.5" />}
                 active={flipV}
               />
             </div>
@@ -1432,9 +1433,6 @@ export default function ImageEditor({
                   height={144}
                   className="h-full w-full"
                 />
-                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded bg-white/90 px-1.5 py-0.5 text-[9px] font-bold text-teal-700 shadow">
-                  {activeCropHandle.toUpperCase()} · 3×
-                </span>
               </div>
             )}
           </div>
@@ -1826,7 +1824,7 @@ function CanvasToolButton({
       aria-label={label}
       title={label}
       aria-pressed={active}
-      className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
+      className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
         active
           ? "bg-teal-100 text-teal-700"
           : "text-slate-600 hover:bg-slate-100"
