@@ -249,7 +249,8 @@ export function useProjectState() {
       setBusy(true);
       try {
         const ts = new Date().toISOString().slice(0, 10);
-        const saved = await savePDF(pdf, `print-batch-${ts}.pdf`);
+        const documentType = DOC_CATEGORIES[defaultCategory].label;
+        const saved = await savePDF(pdf, `${documentType}-${ts}.pdf`);
         if (saved) setShowExportToast(true);
       } catch (error) {
         console.error(error);
@@ -260,7 +261,7 @@ export function useProjectState() {
         setBusy(false);
       }
     },
-    [docs],
+    [defaultCategory, docs],
   );
 
   const cancelPdfExport = useCallback(() => {
