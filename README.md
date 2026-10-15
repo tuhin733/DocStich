@@ -50,6 +50,17 @@ Package the Windows desktop installer (NSIS):
 npm run electron:build
 ```
 
+## GitHub releases
+
+Push a version tag such as `v1.0.0` to build the Windows installer and publish
+it as a GitHub release. The release workflow runs the type-check, lint, and
+tests before packaging the app.
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
 Run the project's checks:
 
 ```sh
