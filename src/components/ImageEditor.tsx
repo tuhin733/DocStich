@@ -21,12 +21,16 @@ import type { UploadedDoc } from "../types";
 
 export type FilterId =
   | "none"
-  | "magic"
-  | "document"
+  | "vivid-light"
+  | "contrast-bw"
+  | "vibrant"
+  | "solt-tone"
+  | "sharp-black"
   | "bw"
-  | "grayscale"
-  | "sharpen"
-  | "deblur";
+  | "carbon-black"
+  | "ocv-black"
+  | "gray"
+  | "color-pop";
 
 export interface EditResult {
   file: File;
@@ -80,6 +84,103 @@ interface Props {
   onClose: () => void;
 }
 
+interface ToneSettings {
+  brightness?: number;
+  contrast?: number;
+  saturation?: number;
+  warmth?: number;
+}
+
+function applyTone(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  { brightness = 0, contrast = 1, saturation = 1, warmth = 0 }: ToneSettings,
+) {
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const pixels = imageData.data;
+  for (let i = 0; i < pixels.length; i += 4) {
+    const red = pixels[i];
+    const green = pixels[i + 1];
+    const blue = pixels[i + 2];
+    const gray = 0.299 * red + 0.587 * green + 0.114 * blue;
+    pixels[i] = (gray + (red - gray) * saturation - 128) * contrast + 128 + brightness + warmth;
+    pixels[i + 1] = (gray + (green - gray) * saturation - 128) * contrast + 128 + brightness;
+    pixels[i + 2] = (gray + (blue - gray) * saturation - 128) * contrast + 128 + brightness - warmth;
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function applyGrayscale(ctx: CanvasRenderingContext2D, w: number, h: number, contrast = 1, brightness = 0) {
+  applyTone(ctx, w, h, { saturation: 0, contrast, brightness });
+}
+
+function applyThresholdBlackAndWhite(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const pixels = imageData.data;
+  const histogram = new Uint32Array(256);
+  for (let i = 0; i < pixels.length; i += 4) {
+    const gray = Math.round(0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2]);
+    histogram[gray]++;
+  }
+
+  const total = pixels.length / 4;
+  let sum = 0;
+  for (let value = 0; value < 256; value++) sum += value * histogram[value];
+  let backgroundWeight = 0;
+  let backgroundSum = 0;
+  let threshold = 130;
+  let maxVariance = 0;
+  for (let value = 0; value < 256; value++) {
+    backgroundWeight += histogram[value];
+    if (backgroundWeight === 0) continue;
+    const foregroundWeight = total - backgroundWeight;
+    if (foregroundWeight === 0) break;
+    backgroundSum += value * histogram[value];
+    const meanBackground = backgroundSum / backgroundWeight;
+    const meanForeground = (sum - backgroundSum) / foregroundWeight;
+    const variance = backgroundWeight * foregroundWeight *
+      (meanBackground - meanForeground) ** 2;
+    if (variance > maxVariance) {
+      maxVariance = variance;
+      threshold = value;
+    }
+  }
+
+  for (let i = 0; i < pixels.length; i += 4) {
+    const gray = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+    const value = gray > threshold ? 255 : 0;
+    pixels[i] = value;
+    pixels[i + 1] = value;
+    pixels[i + 2] = value;
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function applySharpen(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const source = imageData.data;
+  const output = new Uint8ClampedArray(source);
+  const kernel = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const index = (y * w + x) * 4;
+      for (let channel = 0; channel < 3; channel++) {
+        let sum = 0;
+        let kernelIndex = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const neighbor = ((y + dy) * w + x + dx) * 4 + channel;
+            sum += source[neighbor] * kernel[kernelIndex++];
+          }
+        }
+        output[index + channel] = sum;
+      }
+    }
+  }
+  ctx.putImageData(new ImageData(output, w, h), 0, 0);
+}
+
 const FILTERS: {
   id: FilterId;
   label: string;
@@ -95,187 +196,77 @@ const FILTERS: {
     apply: () => {},
   },
   {
-    id: "magic",
-    label: "Magic Color",
-    desc: "Balance contrast and lift faded colors",
-    icon: <Wand2 className="h-4 w-4" />,
-    apply: (ctx, w, h) => {
-      const imgData = ctx.getImageData(0, 0, w, h);
-      const d = imgData.data;
-      const histogram = new Uint32Array(256);
-      for (let i = 0; i < d.length; i += 4) {
-        const luminance = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
-        histogram[luminance]++;
-      }
-
-      const pixelCount = d.length / 4;
-      const percentile = (target: number) => {
-        let count = 0;
-        for (let value = 0; value < histogram.length; value++) {
-          count += histogram[value];
-          if (count >= pixelCount * target) return value;
-        }
-        return 255;
-      };
-      const low = percentile(0.01);
-      const high = Math.max(low + 1, percentile(0.99));
-      const range = high - low;
-
-      for (let i = 0; i < d.length; i += 4) {
-        const luminance = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-        const adjusted = Math.max(0, Math.min(255, ((luminance - low) / range) * 255));
-        const scale = luminance > 0 ? adjusted / luminance : 0;
-        d[i] = Math.min(255, d[i] * scale);
-        d[i + 1] = Math.min(255, d[i + 1] * scale);
-        d[i + 2] = Math.min(255, d[i + 2] * scale);
-      }
-      ctx.putImageData(imgData, 0, 0);
-    },
+    id: "vivid-light",
+    label: "Vivit Light",
+    desc: "Brighten the image and lift its colors",
+    icon: <Sun className="h-4 w-4" />,
+    apply: (ctx, w, h) => applyTone(ctx, w, h, { brightness: 12, contrast: 1.06, saturation: 1.12 }),
   },
   {
-    id: "document",
-    label: "Clean Document",
-    desc: "Whiten paper and lift uneven shadows",
+    id: "contrast-bw",
+    label: "Contrast B&W",
+    desc: "Monochrome with stronger tonal contrast",
+    icon: <Contrast className="h-4 w-4" />,
+    apply: (ctx, w, h) => applyGrayscale(ctx, w, h, 1.65),
+  },
+  {
+    id: "vibrant",
+    label: "Vibrant",
+    desc: "Boost color intensity and contrast",
+    icon: <Droplets className="h-4 w-4" />,
+    apply: (ctx, w, h) => applyTone(ctx, w, h, { contrast: 1.08, saturation: 1.55 }),
+  },
+  {
+    id: "solt-tone",
+    label: "Solt Tone",
+    desc: "Add a soft, warm vintage tone",
     icon: <Sun className="h-4 w-4" />,
+    apply: (ctx, w, h) => applyTone(ctx, w, h, { brightness: 3, contrast: 0.94, saturation: 0.7, warmth: 14 }),
+  },
+  {
+    id: "sharp-black",
+    label: "Sharp Black",
+    desc: "Sharpen edges and deepen monochrome contrast",
+    icon: <Contrast className="h-4 w-4" />,
     apply: (ctx, w, h) => {
-      const imgData = ctx.getImageData(0, 0, w, h);
-      const d = imgData.data;
-      for (let i = 0; i < d.length; i += 4) {
-        const luminance = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-        const adjusted = luminance > 205
-          ? 255
-          : Math.max(0, Math.min(255, (luminance - 18) * 1.22));
-        const scale = luminance > 0 ? adjusted / luminance : 0;
-        d[i] = Math.min(255, d[i] * scale);
-        d[i + 1] = Math.min(255, d[i + 1] * scale);
-        d[i + 2] = Math.min(255, d[i + 2] * scale);
-      }
-      ctx.putImageData(imgData, 0, 0);
+      applySharpen(ctx, w, h);
+      applyGrayscale(ctx, w, h, 1.45);
     },
   },
   {
     id: "bw",
-    label: "B&W Document",
-    desc: "High-contrast black & white for text",
+    label: "B&W",
+    desc: "Classic smooth black and white",
     icon: <Type className="h-4 w-4" />,
-    apply: (ctx, w, h) => {
-      const imgData = ctx.getImageData(0, 0, w, h);
-      const d = imgData.data;
-      const histogram = new Uint32Array(256);
-      for (let i = 0; i < d.length; i += 4) {
-        const gray = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
-        histogram[gray]++;
-      }
-      const total = d.length / 4;
-      let sum = 0;
-      for (let i = 0; i < 256; i++) sum += i * histogram[i];
-      let backgroundWeight = 0;
-      let backgroundSum = 0;
-      let threshold = 130;
-      let maxVariance = 0;
-      for (let i = 0; i < 256; i++) {
-        backgroundWeight += histogram[i];
-        if (backgroundWeight === 0) continue;
-        const foregroundWeight = total - backgroundWeight;
-        if (foregroundWeight === 0) break;
-        backgroundSum += i * histogram[i];
-        const meanBackground = backgroundSum / backgroundWeight;
-        const meanForeground = (sum - backgroundSum) / foregroundWeight;
-        const variance = backgroundWeight * foregroundWeight *
-          (meanBackground - meanForeground) ** 2;
-        if (variance > maxVariance) {
-          maxVariance = variance;
-          threshold = i;
-        }
-      }
-      for (let i = 0; i < d.length; i += 4) {
-        const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-        const v = gray > threshold ? 255 : 0;
-        d[i] = v;
-        d[i + 1] = v;
-        d[i + 2] = v;
-      }
-      ctx.putImageData(imgData, 0, 0);
-    },
+    apply: (ctx, w, h) => applyGrayscale(ctx, w, h),
   },
   {
-    id: "grayscale",
-    label: "Grayscale",
-    desc: "Smooth grayscale, removes color casts",
-    icon: <Sun className="h-4 w-4" />,
-    apply: (ctx, w, h) => {
-      const imgData = ctx.getImageData(0, 0, w, h);
-      const d = imgData.data;
-      for (let i = 0; i < d.length; i += 4) {
-        const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-        d[i] = gray;
-        d[i + 1] = gray;
-        d[i + 2] = gray;
-      }
-      ctx.putImageData(imgData, 0, 0);
-    },
-  },
-  {
-    id: "sharpen",
-    label: "Sharpen Text",
-    desc: "Sharpen document text and fine edges",
+    id: "carbon-black",
+    label: "Carbon Black",
+    desc: "Deep blacks with crisp grayscale detail",
     icon: <Contrast className="h-4 w-4" />,
-    apply: (ctx, w, h) => {
-      const src = ctx.getImageData(0, 0, w, h);
-      const s = src.data;
-      const out = new Uint8ClampedArray(s);
-      const k = [0, -1, 0, -1, 5, -1, 0, -1, 0];
-      for (let y = 1; y < h - 1; y++) {
-        for (let x = 1; x < w - 1; x++) {
-          const idx = (y * w + x) * 4;
-          for (let c = 0; c < 3; c++) {
-            let sum = 0;
-            let ki = 0;
-            for (let dy = -1; dy <= 1; dy++) {
-              for (let dx = -1; dx <= 1; dx++) {
-                const ni = ((y + dy) * w + (x + dx)) * 4 + c;
-                sum += s[ni] * k[ki++];
-              }
-            }
-            out[idx + c] = Math.max(0, Math.min(255, sum));
-          }
-        }
-      }
-      ctx.putImageData(new ImageData(out, w, h), 0, 0);
-    },
+    apply: (ctx, w, h) => applyGrayscale(ctx, w, h, 1.55, -8),
   },
   {
-    id: "deblur",
-    label: "Reduce Blur",
-    desc: "Restore edge definition in slightly blurred images",
+    id: "ocv-black",
+    label: "OCVBlack",
+    desc: "Thresholded monochrome for clean black and white",
+    icon: <Type className="h-4 w-4" />,
+    apply: applyThresholdBlackAndWhite,
+  },
+  {
+    id: "gray",
+    label: "Gray",
+    desc: "Soft, low-contrast grayscale",
+    icon: <CircleDot className="h-4 w-4" />,
+    apply: (ctx, w, h) => applyGrayscale(ctx, w, h, 0.82, 8),
+  },
+  {
+    id: "color-pop",
+    label: "Color Pop",
+    desc: "Make vivid colors stand out from neutral tones",
     icon: <Wand2 className="h-4 w-4" />,
-    apply: (ctx, w, h) => {
-      const src = ctx.getImageData(0, 0, w, h);
-      const input = src.data;
-      const output = new Uint8ClampedArray(input);
-      const weights = [1, 2, 1, 2, 4, 2, 1, 2, 1];
-
-      for (let y = 1; y < h - 1; y++) {
-        for (let x = 1; x < w - 1; x++) {
-          const index = (y * w + x) * 4;
-          for (let channel = 0; channel < 3; channel++) {
-            let blurred = 0;
-            let weightIndex = 0;
-            for (let dy = -1; dy <= 1; dy++) {
-              for (let dx = -1; dx <= 1; dx++) {
-                const neighbor = ((y + dy) * w + x + dx) * 4 + channel;
-                blurred += input[neighbor] * weights[weightIndex++];
-              }
-            }
-            blurred /= 16;
-            output[index + channel] = input[index + channel] +
-              (input[index + channel] - blurred) * 1.5;
-          }
-        }
-      }
-
-      ctx.putImageData(new ImageData(output, w, h), 0, 0);
-    },
+    apply: (ctx, w, h) => applyTone(ctx, w, h, { contrast: 1.04, saturation: 1.9 }),
   },
 ];
 
