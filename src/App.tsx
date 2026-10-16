@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Minus, Square, Copy, X } from "lucide-react";
 import { DOC_CATEGORIES } from "./constants";
 import { paginate } from "./lib/pagination";
@@ -45,7 +45,53 @@ function App() {
   } = useProjectState();
 
   const [isMaximized, setIsMaximized] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<
+    | { state: "checking" }
+    | { state: "available"; tag: string; publishedAt: string }
+    | { state: "current"; tag: string; publishedAt: string }
+    | { state: "error" }
+  >({ state: "checking" });
   const desktopAPI = window.desktopAPI;
+
+  const checkForUpdates = useCallback(async () => {
+    if (!desktopAPI) {
+      setUpdateStatus({ state: "error" });
+      return;
+    }
+
+    setUpdateStatus({ state: "checking" });
+    try {
+      const latestRelease = await desktopAPI.checkUpdates();
+      const latestVersion = latestRelease.tag.replace(/^v/, "");
+      const currentParts = __APP_VERSION__.split(".").map(Number);
+      const latestParts = latestVersion.split(".").map(Number);
+      const hasNewerVersion =
+        latestParts.length === currentParts.length &&
+        latestParts.every(Number.isInteger) &&
+        latestParts.some(
+          (part, index) =>
+            part > currentParts[index] &&
+            latestParts
+              .slice(0, index)
+              .every((previousPart, previousIndex) =>
+                previousPart === currentParts[previousIndex],
+              ),
+        );
+
+      setUpdateStatus({
+        state: hasNewerVersion ? "available" : "current",
+        tag: latestRelease.tag,
+        publishedAt: latestRelease.publishedAt,
+      });
+    } catch (error) {
+      console.error("Unable to check for updates", error);
+      setUpdateStatus({ state: "error" });
+    }
+  }, [desktopAPI]);
+
+  useEffect(() => {
+    if (desktopAPI) void checkForUpdates();
+  }, [checkForUpdates, desktopAPI]);
 
   useEffect(() => {
     if (!desktopAPI) return;
@@ -65,7 +111,7 @@ function App() {
       active = false;
       unsubscribe();
     };
-  }, []);
+  }, [desktopAPI]);
 
   const { pages } = useMemo(() => paginate(docs, settings), [docs, settings]);
   const pageCount = pages.length;
@@ -100,6 +146,9 @@ function App() {
             <h1 className="text-sm font-bold tracking-tight text-slate-800">
               Doc<span className="text-teal-600">Stitch</span>
             </h1>
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+              v{__APP_VERSION__}
+            </span>
           </div>
           {desktopAPI && (
             <div className="app-window-controls flex h-full">
@@ -241,6 +290,27 @@ function App() {
             </div>
           </div>
         </main>
+        <footer className="flex min-h-8 shrink-0 items-center justify-between gap-2 border-t border-slate-200 bg-white px-3 text-[11px] text-slate-500">
+          <span role="status" aria-live="polite">
+            {updateStatus.state === "checking" &&
+              (desktopAPI ? "Checking for updates…" : "Version " + __APP_VERSION__)}
+            {updateStatus.state === "available" &&
+              `Update available: ${updateStatus.tag} · released ${new Date(updateStatus.publishedAt).toLocaleDateString()}`}
+            {updateStatus.state === "current" &&
+              `Up to date · latest ${updateStatus.tag} released ${new Date(updateStatus.publishedAt).toLocaleDateString()}`}
+            {updateStatus.state === "error" && "Couldn't check for updates"}
+          </span>
+          {desktopAPI && (
+            <button
+              type="button"
+              onClick={() => void checkForUpdates()}
+              disabled={updateStatus.state === "checking"}
+              className="shrink-0 font-semibold text-teal-700 hover:text-teal-800 disabled:cursor-wait disabled:opacity-60"
+            >
+              {updateStatus.state === "checking" ? "Checking…" : "Check for updates"}
+            </button>
+          )}
+        </footer>
       </div>
 
       {showExportToast && (

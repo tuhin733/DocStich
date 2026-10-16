@@ -1,3 +1,5 @@
+declare const __APP_VERSION__: string;
+
 interface Window {
   desktopAPI?: {
     savePdf(
@@ -8,6 +10,7 @@ interface Window {
     minimize(): Promise<void>;
     toggleMaximize(): Promise<void>;
     close(): Promise<void>;
+    checkUpdates(): Promise<{ tag: string; publishedAt: string }>;
     onMaximizeChange(callback: (isMaximized: boolean) => void): () => void;
   };
 }

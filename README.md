@@ -10,6 +10,7 @@ DocStitch arranges document and ID-card images on A4 pages and exports them as a
 - Edit, duplicate, reorder, and remove images; adjust individual image placement and size.
 - Export PDFs with lossless, standard, balanced, or custom target-size compression.
 - Automatically save the current project in browser storage and restore it on the next launch.
+- Show the installed app version and check GitHub Releases for the latest published update.
 
 ## Requirements
 
@@ -54,7 +55,8 @@ npm run electron:build
 
 Push a version tag such as `v1.0.0` to build the Windows installer and publish
 it as a GitHub release. The release workflow runs the type-check, lint, and
-tests before packaging the app.
+tests before packaging the app. The desktop app shows the latest release
+version and publication date when an update is available.
 
 ```sh
 git tag v1.0.0

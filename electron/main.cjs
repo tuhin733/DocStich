@@ -54,6 +54,39 @@ ipcMain.handle("window:close", (event) => {
   mainWindow.close();
 });
 
+ipcMain.handle("app:check-updates", async (event) => {
+  if (!isTrustedSender(event)) throw new Error("Untrusted update check request");
+
+  const response = await fetch(
+    "https://api.github.com/repos/tuhin733/DocStich/releases/latest",
+    {
+      headers: {
+        Accept: "application/vnd.github+json",
+        "User-Agent": "DocStitch",
+      },
+      signal: AbortSignal.timeout(10000),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`GitHub release check failed (${response.status})`);
+  }
+
+  const release = await response.json();
+  if (
+    typeof release.tag_name !== "string" ||
+    !/^v?\d+\.\d+\.\d+$/.test(release.tag_name) ||
+    typeof release.published_at !== "string" ||
+    Number.isNaN(Date.parse(release.published_at))
+  ) {
+    throw new Error("The latest GitHub release has invalid metadata");
+  }
+
+  return {
+    tag: release.tag_name,
+    publishedAt: release.published_at,
+  };
+});
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
