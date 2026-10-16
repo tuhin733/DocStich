@@ -5,6 +5,7 @@ const STORAGE_KEY = "docstitch-project-v1";
 
 type PersistedProject = {
   settings: LayoutSettings;
+  blankPageCount?: number;
   docs: Array<
     Omit<UploadedDoc, "file" | "url"> & {
       fileDataUrl?: string;
@@ -39,6 +40,7 @@ const createFileFromDataUrl = async (
 export const serializeProject = async (
   docs: UploadedDoc[],
   settings: LayoutSettings,
+  blankPageCount = 0,
 ): Promise<void> => {
   const serializedDocs = await Promise.all(
     docs.map(async (doc) => {
@@ -55,6 +57,7 @@ export const serializeProject = async (
 
   const payload: PersistedProject = {
     settings,
+    blankPageCount,
     docs: serializedDocs,
   };
 
@@ -64,6 +67,7 @@ export const serializeProject = async (
 export const loadProject = async (): Promise<{
   docs: UploadedDoc[];
   settings: LayoutSettings;
+  blankPageCount: number;
 } | null> => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -93,6 +97,10 @@ export const loadProject = async (): Promise<{
     return {
       docs,
       settings: parsed.settings ?? DEFAULT_LAYOUT,
+      blankPageCount: Math.max(
+        0,
+        Math.floor(parsed.blankPageCount ?? 0),
+      ),
     };
   } catch (error) {
     console.error("Unable to restore saved project state:", error);

@@ -30,8 +30,11 @@ export interface PageLayout {
 export function paginate(
   docs: UploadedDoc[],
   s: LayoutSettings,
+  blankPageCount = 0,
 ): PageLayout {
-  if (docs.length === 0) return { pages: [] };
+  if (docs.length === 0) {
+    return { pages: Array.from({ length: Math.max(0, Math.floor(blankPageCount)) }, () => []) };
+  }
 
   const usableW = A4.w - s.margin * 2;
   const usableH = A4.h - s.margin * 2;
@@ -154,5 +157,13 @@ export function paginate(
       return placement ? { ...placed, ...placement } : placed;
     }),
   );
-  return { pages: flat };
+  return {
+    pages: [
+      ...flat,
+      ...Array.from(
+        { length: Math.max(0, Math.floor(blankPageCount)) },
+        () => [],
+      ),
+    ],
+  };
 }

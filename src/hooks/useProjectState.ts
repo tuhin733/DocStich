@@ -10,6 +10,7 @@ const genId = () => `doc-${Date.now()}-${++idCounter}`;
 
 export function useProjectState() {
   const [docs, setDocs] = useState<UploadedDoc[]>([]);
+  const [blankPageCount, setBlankPageCount] = useState(0);
   const [settings, setSettings] = useState<LayoutSettings>(DEFAULT_LAYOUT);
   const [busy, setBusy] = useState(false);
   const [arrangeMode, setArrangeMode] = useState(false);
@@ -32,6 +33,7 @@ export function useProjectState() {
       if (restored) {
         setSettings(restored.settings);
         setDocs(restored.docs);
+        setBlankPageCount(restored.blankPageCount);
       }
 
       hasHydratedProjectRef.current = true;
@@ -44,8 +46,8 @@ export function useProjectState() {
 
   useEffect(() => {
     if (!hasHydratedProjectRef.current) return;
-    void serializeProject(docs, settings);
-  }, [docs, settings]);
+    void serializeProject(docs, settings, blankPageCount);
+  }, [blankPageCount, docs, settings]);
 
   useEffect(() => {
     if (!showExportToast) return;
@@ -231,20 +233,25 @@ export function useProjectState() {
   const clearAllDocs = useCallback(() => {
     docs.forEach((doc) => URL.revokeObjectURL(doc.url));
     setDocs([]);
+    setBlankPageCount(0);
     clearProject();
   }, [docs]);
 
+  const addPage = useCallback(() => {
+    setBlankPageCount((count) => count + 1);
+  }, []);
+
   const handleExport = useCallback(() => {
-    if (docs.length === 0) return;
+    if (docs.length === 0 && blankPageCount === 0) return;
     setActionError("");
     setShowExportToast(false);
     setShowPdfExportDialog(true);
-  }, [docs.length]);
+  }, [blankPageCount, docs.length]);
 
   const handleExportPDF = useCallback(
     async (pdf: Blob) => {
       setShowPdfExportDialog(false);
-      if (docs.length === 0) return;
+      if (docs.length === 0 && blankPageCount === 0) return;
 
       setBusy(true);
       try {
@@ -261,7 +268,7 @@ export function useProjectState() {
         setBusy(false);
       }
     },
-    [defaultCategory, docs],
+    [blankPageCount, defaultCategory, docs],
   );
 
   const cancelPdfExport = useCallback(() => {
@@ -270,6 +277,7 @@ export function useProjectState() {
 
   return {
     docs,
+    blankPageCount,
     settings,
     busy,
     arrangeMode,
@@ -290,6 +298,7 @@ export function useProjectState() {
     setSettings,
     setDocs,
     addFiles,
+    addPage,
     removeDoc,
     duplicateDoc,
     reorderDoc,

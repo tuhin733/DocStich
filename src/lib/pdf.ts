@@ -79,9 +79,10 @@ export async function generatePDF(
   settings: LayoutSettings,
   compression: PdfCompression = "standard",
   targetBytes?: number,
+  blankPageCount = 0,
 ): Promise<Blob> {
   const { jsPDF } = await import("jspdf");
-  const { pages } = paginate(docs, settings);
+  const { pages } = paginate(docs, settings, blankPageCount);
   const sourceCanvases = new Map<string, HTMLCanvasElement>();
   for (const doc of docs) {
     if (sourceCanvases.has(doc.id)) continue;

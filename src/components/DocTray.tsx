@@ -73,7 +73,7 @@ export default function DocTray({
   }
 
   return (
-    <div className="relative">
+    <div className="relative min-h-0 flex-1">
       <div
         ref={listRef}
         role="region"
@@ -87,7 +87,7 @@ export default function DocTray({
             bottom: maxScrollTop - list.scrollTop > 1,
           });
         }}
-        className="max-h-[45vh] space-y-2 overflow-y-auto overscroll-contain pr-1 scrollbar-hidden scroll-smooth focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
+        className="h-full min-h-0 space-y-2 overflow-y-auto overscroll-contain pr-1 scrollbar-hidden scroll-smooth focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
       >
         {docs.map((doc, idx) => {
           const cat = DOC_CATEGORIES[doc.category];

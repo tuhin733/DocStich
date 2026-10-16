@@ -38,10 +38,11 @@ describe("project storage", () => {
       heightMm: 277,
     };
 
-    await serializeProject([originalDoc], settings);
+    await serializeProject([originalDoc], settings, 2);
     const restored = await loadProject();
 
     expect(restored).not.toBeNull();
+    expect(restored?.blankPageCount).toBe(2);
     expect(restored?.settings).toMatchObject({
       cardW: 120,
       gap: 8,

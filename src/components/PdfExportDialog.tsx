@@ -6,6 +6,7 @@ import { generatePDF, PDF_COMPRESSION_OPTIONS, type PdfCompression } from "../li
 interface Props {
   docs: UploadedDoc[];
   settings: LayoutSettings;
+  blankPageCount: number;
   onExport: (pdf: Blob) => void;
   onCancel: () => void;
 }
@@ -51,7 +52,13 @@ function SizeEstimate({
   );
 }
 
-export default function PdfExportDialog({ docs, settings, onExport, onCancel }: Props) {
+export default function PdfExportDialog({
+  docs,
+  settings,
+  blankPageCount,
+  onExport,
+  onCancel,
+}: Props) {
   const [compression, setCompression] = useState<PdfCompression>("balanced");
   const [targetSize, setTargetSize] = useState("");
   const [targetUnit, setTargetUnit] = useState<"KB" | "MB">("KB");
@@ -92,6 +99,7 @@ export default function PdfExportDialog({ docs, settings, onExport, onCancel }: 
         settings,
         compression,
         compression === "custom" ? targetBytes : undefined,
+        blankPageCount,
       )
         .then((pdf) => {
           if (active) setEstimatedPdf(pdf);
@@ -112,7 +120,7 @@ export default function PdfExportDialog({ docs, settings, onExport, onCancel }: 
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [compression, docs, settings, targetBytes, validTarget]);
+  }, [blankPageCount, compression, docs, settings, targetBytes, validTarget]);
 
   const selectCompression = (value: PdfCompression) => {
     setEstimatedPdf(null);
@@ -128,7 +136,13 @@ export default function PdfExportDialog({ docs, settings, onExport, onCancel }: 
     setExporting(true);
     setEstimateError("");
     try {
-      const pdf = await generatePDF(docs, settings, compression);
+      const pdf = await generatePDF(
+        docs,
+        settings,
+        compression,
+        undefined,
+        blankPageCount,
+      );
       onExport(pdf);
     } catch (error: unknown) {
       setEstimateError(

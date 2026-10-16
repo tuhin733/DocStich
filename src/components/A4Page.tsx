@@ -3,15 +3,12 @@ import type { PointerEvent, WheelEvent } from "react";
 import type { LayoutSettings, UploadedDoc } from "../types";
 import { A4 } from "../types";
 import { paginate } from "../lib/pagination";
-import {
-  ChevronLeft,
-  ChevronRight,
-  FileText,
-} from "lucide-react";
+import { FileText } from "lucide-react";
 
 interface Props {
   docs: UploadedDoc[];
   settings: LayoutSettings;
+  blankPageCount: number;
   onPlacementChange: (
     id: string,
     placement: NonNullable<UploadedDoc["placement"]>,
@@ -37,15 +34,17 @@ type Interaction = {
 export default function A4Page({
   docs,
   settings,
+  blankPageCount,
   onPlacementChange,
   arrangeMode,
 }: Props) {
-  const { pages } = paginate(docs, settings);
+  const { pages } = paginate(docs, settings, blankPageCount);
   const [pageIdx, setPageIdx] = useState(0);
   const [scale, setScale] = useState(1.8);
   const [maxScale, setMaxScale] = useState(MAX_SCALE);
   const interaction = useRef<Interaction | null>(null);
   const previewViewport = useRef<HTMLDivElement>(null);
+  const pageScrollDelta = useRef(0);
 
   const activePageIdx = Math.min(pageIdx, Math.max(0, pages.length - 1));
   const currentPage = pages[activePageIdx] ?? [];
@@ -74,15 +73,37 @@ export default function A4Page({
   }, []);
 
   const handlePreviewWheel = (event: WheelEvent<HTMLDivElement>) => {
-    if (!event.ctrlKey || event.deltaY === 0) return;
+    if (event.deltaY === 0) return;
+
+    if (event.ctrlKey) {
+      event.preventDefault();
+      setScale((currentScale) =>
+        Math.max(
+          Math.min(MIN_SCALE, maxScale),
+          Math.min(maxScale, currentScale * Math.exp(-event.deltaY * 0.001)),
+        ),
+      );
+      return;
+    }
+
+    if (pages.length < 2) return;
+    const direction = Math.sign(event.deltaY);
+    if (
+      (direction < 0 && activePageIdx === 0) ||
+      (direction > 0 && activePageIdx >= pages.length - 1)
+    ) {
+      pageScrollDelta.current = 0;
+      return;
+    }
 
     event.preventDefault();
-    setScale((currentScale) =>
-      Math.max(
-        Math.min(MIN_SCALE, maxScale),
-        Math.min(maxScale, currentScale * Math.exp(-event.deltaY * 0.001)),
-      ),
-    );
+    pageScrollDelta.current += event.deltaY;
+    if (Math.abs(pageScrollDelta.current) >= 80) {
+      setPageIdx((current) =>
+        Math.max(0, Math.min(pages.length - 1, current + direction)),
+      );
+      pageScrollDelta.current = 0;
+    }
   };
 
   const beginInteraction = (
@@ -139,6 +160,16 @@ export default function A4Page({
     interaction.current = null;
   };
 
+  useEffect(() => {
+    setPageIdx((currentPageIdx) =>
+      Math.min(currentPageIdx, Math.max(0, pages.length - 1)),
+    );
+  }, [pages.length]);
+
+  useEffect(() => {
+    if (blankPageCount > 0) setPageIdx(pages.length - 1);
+  }, [blankPageCount, pages.length]);
+
   const resizeByKeyboard = (
     event: React.KeyboardEvent<HTMLButtonElement>,
     placed: (typeof currentPage)[number],
@@ -167,39 +198,24 @@ export default function A4Page({
 
   return (
     <div className="relative flex h-full min-h-0 w-full min-w-0 flex-col items-center">
-      <div className="relative z-10 mb-2 flex w-full shrink-0 flex-wrap items-center justify-center gap-2">
-        {pages.length > 1 && (
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setPageIdx((p) => Math.max(0, p - 1))}
-              disabled={activePageIdx === 0}
-              aria-label="Previous page"
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-30"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span className="text-sm font-medium text-slate-600">
-              Page {activePageIdx + 1} of {pages.length}
-            </span>
-            <button
-              onClick={() => setPageIdx((p) => Math.min(pages.length - 1, p + 1))}
-              disabled={activePageIdx >= pages.length - 1}
-              aria-label="Next page"
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-30"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-      </div>
       {/* A4 sheet */}
       <div
         ref={previewViewport}
-        className="scrollbar-hidden absolute inset-x-0 -top-[52px] -bottom-3 min-h-0 w-full min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain scroll-smooth pt-12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
+        className="scrollbar-hidden absolute inset-0 min-h-0 w-full min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain scroll-smooth focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
         role="region"
         aria-label="Scrollable A4 preview"
         tabIndex={0}
         onWheel={handlePreviewWheel}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget || pages.length < 2) return;
+          if (event.key === "ArrowLeft") {
+            event.preventDefault();
+            setPageIdx((current) => Math.max(0, current - 1));
+          } else if (event.key === "ArrowRight") {
+            event.preventDefault();
+            setPageIdx((current) => Math.min(pages.length - 1, current + 1));
+          }
+        }}
       >
         <div className="flex w-max min-w-full justify-center p-2">
           {hasPages ? (

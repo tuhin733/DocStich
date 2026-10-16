@@ -13,6 +13,7 @@ import PdfExportDialog from "./components/PdfExportDialog";
 function App() {
   const {
     docs,
+    blankPageCount,
     settings,
     busy,
     arrangeMode,
@@ -27,6 +28,7 @@ function App() {
     setEditingDocId,
     setImportError,
     addFiles,
+    addPage,
     removeDoc,
     duplicateDoc,
     reorderDoc,
@@ -113,7 +115,10 @@ function App() {
     };
   }, [desktopAPI]);
 
-  const { pages } = useMemo(() => paginate(docs, settings), [docs, settings]);
+  const { pages } = useMemo(
+    () => paginate(docs, settings, blankPageCount),
+    [blankPageCount, docs, settings],
+  );
   const pageCount = pages.length;
 
   useEffect(() => {
@@ -185,10 +190,10 @@ function App() {
           )}
         </header>
 
-        <main className="relative z-0 min-h-0 flex-1 overflow-visible">
-          <div className="mx-auto h-full max-w-7xl px-3 py-3 sm:px-4">
-            <div className="grid h-full min-h-0 grid-cols-1 items-start gap-4 min-[900px]:grid-cols-[260px_minmax(0,1fr)_240px] lg:grid-cols-[300px_minmax(0,1fr)_260px]">
-              <div className="space-y-3">
+        <main className="relative min-h-0 flex-1 overflow-hidden">
+          <div className="mx-auto h-full max-w-7xl px-3 sm:px-4">
+            <div className="grid h-full min-h-0 grid-cols-1 items-stretch gap-4 min-[900px]:grid-cols-[260px_minmax(0,1fr)_240px] lg:grid-cols-[300px_minmax(0,1fr)_260px]">
+              <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden py-3">
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold text-slate-500">
                     Default document type
@@ -233,7 +238,7 @@ function App() {
                   </p>
                 )}
 
-                <div>
+                <div className="flex min-h-0 flex-1 flex-col">
                   <div className="mb-2 flex items-center justify-between">
                     <h2 className="text-sm font-bold text-slate-700">
                       Documents{" "}
@@ -264,34 +269,42 @@ function App() {
                 </div>
               </div>
 
-              <div className="relative h-full min-h-0 min-w-0 overflow-visible">
+              <div className="relative h-full min-h-0 min-w-0 overflow-hidden">
                 <A4Page
                   docs={docs}
                   settings={settings}
+                  blankPageCount={blankPageCount}
                   onPlacementChange={changePlacement}
                   arrangeMode={arrangeMode}
                 />
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <ControlPanel
-                  settings={settings}
-                  onChange={updateSettings}
-                  documentMode={defaultCategory === "document"}
-                  onExport={handleExport}
-                  busy={busy}
-                  cardCount={docs.length}
-                  pageCount={pageCount}
-                  arrangeMode={arrangeMode}
-                  onArrangeModeChange={setArrangeMode}
-                  onResetPlacements={resetPlacements}
-                />
+              <div className="h-full min-h-0 py-3">
+                <div className="h-full min-h-0 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <ControlPanel
+                    settings={settings}
+                    onChange={updateSettings}
+                    documentMode={defaultCategory === "document"}
+                    onExport={handleExport}
+                    busy={busy}
+                    cardCount={docs.length}
+                    pageCount={pageCount}
+                    arrangeMode={arrangeMode}
+                    onArrangeModeChange={setArrangeMode}
+                    onResetPlacements={resetPlacements}
+                    onAddPage={addPage}
+                  />
+                </div>
               </div>
             </div>
           </div>
         </main>
-        <footer className="flex min-h-8 shrink-0 items-center justify-between gap-2 border-t border-slate-200 bg-white px-3 text-[11px] text-slate-500">
-          <span role="status" aria-live="polite">
+        <footer className="relative z-10 flex h-9 shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-3 text-[11px] text-slate-500 shadow-[0_-2px_8px_rgba(15,23,42,0.04)]">
+          <span
+            role="status"
+            aria-live="polite"
+            className="min-w-0 truncate"
+          >
             {updateStatus.state === "checking" &&
               (desktopAPI ? "Checking for updates…" : "Version " + __APP_VERSION__)}
             {updateStatus.state === "available" &&
@@ -305,7 +318,7 @@ function App() {
               type="button"
               onClick={() => void checkForUpdates()}
               disabled={updateStatus.state === "checking"}
-              className="shrink-0 font-semibold text-teal-700 hover:text-teal-800 disabled:cursor-wait disabled:opacity-60"
+              className="shrink-0 rounded-md px-2 py-1 font-semibold text-teal-700 transition-colors hover:bg-teal-50 hover:text-teal-800 disabled:cursor-wait disabled:opacity-60"
             >
               {updateStatus.state === "checking" ? "Checking…" : "Check for updates"}
             </button>
@@ -340,6 +353,7 @@ function App() {
         <PdfExportDialog
           docs={docs}
           settings={settings}
+          blankPageCount={blankPageCount}
           onExport={handleExportPDF}
           onCancel={cancelPdfExport}
         />

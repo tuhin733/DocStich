@@ -10,6 +10,7 @@ import {
   Minus,
   Move,
   RotateCcw,
+  FileText,
 } from "lucide-react";
 
 interface Props {
@@ -23,6 +24,7 @@ interface Props {
   arrangeMode: boolean;
   onArrangeModeChange: (enabled: boolean) => void;
   onResetPlacements: () => void;
+  onAddPage: () => void;
 }
 
 export default function ControlPanel({
@@ -36,15 +38,37 @@ export default function ControlPanel({
   arrangeMode,
   onArrangeModeChange,
   onResetPlacements,
+  onAddPage,
 }: Props) {
   return (
     <div className="space-y-3">
       {/* Layout section */}
       <section>
-        <div className="mb-2 flex items-center gap-2">
-          <Sliders className="h-4 w-4 text-teal-600" />
-          <h3 className="text-sm font-bold text-slate-700">Layout</h3>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <Sliders className="h-4 w-4 shrink-0 text-teal-600" />
+            <h3 className="truncate text-sm font-bold text-slate-700">
+              Control Panel
+            </h3>
+          </div>
+          <span
+            aria-label={`${pageCount} ${pageCount === 1 ? "page" : "pages"}`}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-600"
+          >
+            <FileText className="h-3 w-3 text-teal-600" />
+            <span className="tabular-nums">{pageCount}</span>
+            <span>{pageCount === 1 ? "page" : "pages"}</span>
+          </span>
         </div>
+
+        <button
+          type="button"
+          onClick={onAddPage}
+          className="mb-3 flex min-h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50/60 px-2.5 text-xs font-semibold text-teal-700 transition-colors hover:border-teal-300 hover:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add page
+        </button>
 
         <div className="mb-3 flex gap-2">
           <button
@@ -158,9 +182,8 @@ export default function ControlPanel({
 
       {/* Summary */}
       <section className="rounded-xl bg-slate-50 p-2.5">
-        <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="grid grid-cols-2 gap-2 text-center">
           <Stat value={cardCount} label="Cards" />
-          <Stat value={pageCount} label="Pages" />
           <Stat
             value={cardCount > 0 && pageCount > 0
               ? (cardCount / pageCount).toFixed(1)
@@ -176,7 +199,7 @@ export default function ControlPanel({
           type="button"
           title="Export PDF (Ctrl+S)"
           onClick={onExport}
-          disabled={busy || cardCount === 0}
+          disabled={busy || (cardCount === 0 && pageCount === 0)}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-slate-900 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? (

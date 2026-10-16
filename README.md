@@ -7,6 +7,7 @@ DocStitch arranges document and ID-card images on A4 pages and exports them as a
 - Add multiple image files by browsing or dragging and dropping them.
 - Choose a document type, including Aadhar, Voter ID, PAN, passport, driving licence, ration card, or a custom size.
 - Preview and arrange images on A4 pages, with controls for card width, spacing, and items per page.
+- Add blank A4 pages to the project and include them in exported PDFs.
 - Edit, duplicate, reorder, and remove images; adjust individual image placement and size.
 - Export PDFs with lossless, standard, balanced, or custom target-size compression.
 - Automatically save the current project in browser storage and restore it on the next launch.
