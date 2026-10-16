@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { EditResult } from "../components/ImageEditor";
 import { DEFAULT_LAYOUT, DOC_CATEGORIES } from "../constants";
+import { paginate } from "../lib/pagination";
 import { savePDF } from "../lib/pdf";
 import { clearProject, loadProject, serializeProject } from "../lib/projectStorage";
 import type { DocCategoryId, LayoutSettings, UploadedDoc } from "../types";
@@ -241,6 +242,30 @@ export function useProjectState() {
     setBlankPageCount((count) => count + 1);
   }, []);
 
+  const deletePage = useCallback(
+    (pageIndex: number) => {
+      const pages = paginate(docs, settings, blankPageCount).pages;
+      if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= pages.length) {
+        return;
+      }
+
+      const firstBlankPageIndex = pages.length - blankPageCount;
+      if (pageIndex >= firstBlankPageIndex) {
+        setBlankPageCount((count) => Math.max(0, count - 1));
+        return;
+      }
+
+      const pageDocIds = new Set(pages[pageIndex].map(({ doc }) => doc.id));
+      setDocs((previousDocs) => {
+        previousDocs.forEach((doc) => {
+          if (pageDocIds.has(doc.id)) URL.revokeObjectURL(doc.url);
+        });
+        return previousDocs.filter((doc) => !pageDocIds.has(doc.id));
+      });
+    },
+    [blankPageCount, docs, settings],
+  );
+
   const handleExport = useCallback(() => {
     if (docs.length === 0 && blankPageCount === 0) return;
     setActionError("");
@@ -299,6 +324,7 @@ export function useProjectState() {
     setDocs,
     addFiles,
     addPage,
+    deletePage,
     removeDoc,
     duplicateDoc,
     reorderDoc,

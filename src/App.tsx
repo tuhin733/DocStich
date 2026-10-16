@@ -29,6 +29,7 @@ function App() {
     setImportError,
     addFiles,
     addPage,
+    deletePage,
     removeDoc,
     duplicateDoc,
     reorderDoc,
@@ -289,6 +290,8 @@ function App() {
                     busy={busy}
                     cardCount={docs.length}
                     pageCount={pageCount}
+                    pageDocumentCounts={pages.map((page) => page.length)}
+                    onDeletePage={deletePage}
                     arrangeMode={arrangeMode}
                     onArrangeModeChange={setArrangeMode}
                     onResetPlacements={resetPlacements}

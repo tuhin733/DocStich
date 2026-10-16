@@ -7,7 +7,6 @@ import {
   FlipHorizontal,
   FlipVertical,
   CheckCheck,
-  X,
   RefreshCw,
   Sun,
   Contrast,
@@ -1199,13 +1198,6 @@ export default function ImageEditor({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            disabled={saving}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-          >
-            <X className="h-4 w-4" />
-          </button>
         </div>
 
         {/* Body */}
@@ -1720,7 +1712,7 @@ export default function ImageEditor({
               disabled={saving}
               className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
             >
-              Cancel
+              Done
             </button>
             <button
               onClick={handleSave}
