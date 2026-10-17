@@ -374,7 +374,7 @@ function App() {
           aria-live="polite"
         >
           <CheckCircle2 className="h-5 w-5 text-white" />
-          Export done
+          Exported Successfully
         </div>
       )}
 

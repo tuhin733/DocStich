@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { FileText, Trash2 } from "lucide-react";
 
 interface Props {
@@ -12,6 +12,10 @@ export default function PageManagerDialog({
   onDeletePage,
   onClose,
 }: Props) {
+  const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(
+    null,
+  );
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -54,7 +58,7 @@ export default function PageManagerDialog({
             {pageDocumentCounts.map((documentCount, index) => (
               <li
                 key={index}
-                className="flex items-center justify-between gap-3 py-3"
+                className="flex flex-wrap items-center justify-between gap-3 py-3"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
@@ -71,15 +75,45 @@ export default function PageManagerDialog({
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onDeletePage(index)}
-                  aria-label={`Delete page ${index + 1}`}
-                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-red-200 px-2.5 py-2 text-xs font-semibold text-red-600 transition-colors hover:border-red-300 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </button>
+                {pendingDeleteIndex === index ? (
+                  <div
+                    className="flex shrink-0 items-center gap-1.5"
+                    aria-live="polite"
+                  >
+                    <span className="text-[10px] font-medium text-red-600">
+                      Delete page and documents?
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDeletePage(index);
+                        setPendingDeleteIndex(null);
+                      }}
+                      aria-label={`Confirm deletion of page ${index + 1} and its documents`}
+                      className="rounded-full bg-red-600 px-2 py-1 text-[10px] font-semibold text-white transition-colors hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDeleteIndex(null)}
+                      aria-label={`Cancel deletion of page ${index + 1}`}
+                      className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setPendingDeleteIndex(index)}
+                    aria-label={`Delete page ${index + 1}`}
+                    className="flex shrink-0 items-center gap-1 rounded-full border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-600 transition-colors hover:border-red-300 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Delete
+                  </button>
+                )}
               </li>
             ))}
           </ul>
