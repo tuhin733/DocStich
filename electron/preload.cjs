@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("desktopAPI", {
   toggleMaximize: () => ipcRenderer.invoke("window:toggle-maximize"),
   close: () => ipcRenderer.invoke("window:close"),
   checkUpdates: () => ipcRenderer.invoke("app:check-updates"),
+  openRepository: () => ipcRenderer.invoke("app:open-repository"),
   onMaximizeChange: (callback) => {
     const listener = (_event, isMaximized) => callback(isMaximized);
     ipcRenderer.on("window:maximize-state", listener);

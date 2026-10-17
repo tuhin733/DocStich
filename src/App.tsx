@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Minus, Square, Copy, X } from "lucide-react";
+import {
+  CheckCircle2,
+  Github,
+  Heart,
+  Info,
+  Minus,
+  Square,
+  Copy,
+  X,
+} from "lucide-react";
 import { DOC_CATEGORIES } from "./constants";
 import { paginate } from "./lib/pagination";
 import { useProjectState } from "./hooks/useProjectState";
@@ -9,6 +18,8 @@ import A4Page from "./components/A4Page";
 import ControlPanel from "./components/ControlPanel";
 import ImageEditor from "./components/ImageEditor";
 import PdfExportDialog from "./components/PdfExportDialog";
+import AboutDialog from "./components/AboutDialog";
+import DonationDialog from "./components/DonationDialog";
 
 function App() {
   const {
@@ -48,6 +59,8 @@ function App() {
   } = useProjectState();
 
   const [isMaximized, setIsMaximized] = useState(false);
+  const [showAboutDialog, setShowAboutDialog] = useState(false);
+  const [showDonationDialog, setShowDonationDialog] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<
     | { state: "checking" }
     | { state: "available"; tag: string; publishedAt: string }
@@ -156,39 +169,74 @@ function App() {
               v{__APP_VERSION__}
             </span>
           </div>
-          {desktopAPI && (
-            <div className="app-window-controls flex h-full">
-              <button
-                type="button"
-                aria-label="Minimize window"
-                title="Minimize"
-                onClick={() => void desktopAPI.minimize()}
-              >
-                <Minus className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                aria-label={isMaximized ? "Restore window" : "Maximize window"}
-                title={isMaximized ? "Restore" : "Maximize"}
-                onClick={() => void desktopAPI.toggleMaximize()}
-              >
-                {isMaximized ? (
-                  <Copy className="h-3.5 w-3.5" />
-                ) : (
-                  <Square className="h-3.5 w-3.5" />
-                )}
-              </button>
-              <button
-                type="button"
-                className="close-control"
-                aria-label="Close window"
-                title="Close"
-                onClick={() => void desktopAPI.close()}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          )}
+          <div className="flex h-full items-center">
+            <button
+              type="button"
+              aria-label="Donation"
+              aria-haspopup="dialog"
+              title="Donation"
+              className="group mx-2 flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-100 hover:text-rose-700"
+              onClick={() => setShowDonationDialog(true)}
+            >
+              <Heart className="h-3.5 w-3.5 transition-all group-hover:fill-current" aria-hidden="true" />
+              Donation
+            </button>
+            <a
+              href="https://github.com/tuhin733/DocStich"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open the DocStich project repository on GitHub"
+              title="Open project repository"
+              className="group flex h-full w-10 items-center justify-center text-slate-500"
+              onClick={(event) => {
+                if (!desktopAPI) return;
+                event.preventDefault();
+                void desktopAPI
+                  .openRepository()
+                  .catch((error: unknown) =>
+                    console.error("Unable to open project repository", error),
+                  );
+              }}
+            >
+              <Github
+                className="h-4 w-4 transition-colors group-hover:text-slate-800"
+                aria-hidden="true"
+              />
+            </a>
+            {desktopAPI && (
+              <div className="app-window-controls flex h-full">
+                <button
+                  type="button"
+                  aria-label="Minimize window"
+                  title="Minimize"
+                  onClick={() => void desktopAPI.minimize()}
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={isMaximized ? "Restore window" : "Maximize window"}
+                  title={isMaximized ? "Restore" : "Maximize"}
+                  onClick={() => void desktopAPI.toggleMaximize()}
+                >
+                  {isMaximized ? (
+                    <Copy className="h-3.5 w-3.5" />
+                  ) : (
+                    <Square className="h-3.5 w-3.5" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="close-control"
+                  aria-label="Close window"
+                  title="Close"
+                  onClick={() => void desktopAPI.close()}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
         </header>
 
         <main className="relative min-h-0 flex-1 overflow-hidden">
@@ -196,8 +244,8 @@ function App() {
             <div className="grid h-full min-h-0 grid-cols-1 items-stretch gap-4 min-[900px]:grid-cols-[260px_minmax(0,1fr)_240px] lg:grid-cols-[300px_minmax(0,1fr)_260px]">
               <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden py-3">
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-slate-500">
-                    Default document type
+                  <label className="text-sm font-bold text-slate-700 pb-1 block" htmlFor="default-category">
+                    Document type
                   </label>
                   <div className="flex flex-wrap gap-1.5">
                     {Object.values(DOC_CATEGORIES).map((category) => (
@@ -302,30 +350,20 @@ function App() {
             </div>
           </div>
         </main>
-        <footer className="relative z-10 flex h-9 shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-3 text-[11px] text-slate-500 shadow-[0_-2px_8px_rgba(15,23,42,0.04)]">
-          <span
-            role="status"
-            aria-live="polite"
-            className="min-w-0 truncate"
+        <footer className="relative z-10 flex h-9 shrink-0 items-center justify-end border-t border-slate-200 bg-white px-3 text-[11px] text-slate-500 shadow-[0_-2px_8px_rgba(15,23,42,0.04)]">
+          <button
+            type="button"
+            aria-label="About DocStitch"
+            aria-haspopup="dialog"
+            title="About DocStitch"
+            className="group flex h-8 w-8 items-center justify-center rounded-md text-slate-500"
+            onClick={() => setShowAboutDialog(true)}
           >
-            {updateStatus.state === "checking" &&
-              (desktopAPI ? "Checking for updates…" : "Version " + __APP_VERSION__)}
-            {updateStatus.state === "available" &&
-              `Update available: ${updateStatus.tag} · released ${new Date(updateStatus.publishedAt).toLocaleDateString()}`}
-            {updateStatus.state === "current" &&
-              `Up to date · latest ${updateStatus.tag} released ${new Date(updateStatus.publishedAt).toLocaleDateString()}`}
-            {updateStatus.state === "error" && "Couldn't check for updates"}
-          </span>
-          {desktopAPI && (
-            <button
-              type="button"
-              onClick={() => void checkForUpdates()}
-              disabled={updateStatus.state === "checking"}
-              className="shrink-0 rounded-md px-2 py-1 font-semibold text-teal-700 transition-colors hover:bg-teal-50 hover:text-teal-800 disabled:cursor-wait disabled:opacity-60"
-            >
-              {updateStatus.state === "checking" ? "Checking…" : "Check for updates"}
-            </button>
-          )}
+            <Info
+              className="h-4 w-4 transition-colors group-hover:text-slate-800"
+              aria-hidden="true"
+            />
+          </button>
         </footer>
       </div>
 
@@ -360,6 +398,19 @@ function App() {
           onExport={handleExportPDF}
           onCancel={cancelPdfExport}
         />
+      )}
+
+      {showAboutDialog && (
+        <AboutDialog
+          onClose={() => setShowAboutDialog(false)}
+          updateStatus={updateStatus}
+          hasDesktopAPI={Boolean(desktopAPI)}
+          onCheckUpdates={() => void checkForUpdates()}
+        />
+      )}
+
+      {showDonationDialog && (
+        <DonationDialog onClose={() => setShowDonationDialog(false)} />
       )}
     </>
   );

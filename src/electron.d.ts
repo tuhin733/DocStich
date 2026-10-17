@@ -11,6 +11,7 @@ interface Window {
     toggleMaximize(): Promise<void>;
     close(): Promise<void>;
     checkUpdates(): Promise<{ tag: string; publishedAt: string }>;
+    openRepository(): Promise<void>;
     onMaximizeChange(callback: (isMaximized: boolean) => void): () => void;
   };
 }

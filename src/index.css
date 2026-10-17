@@ -11,6 +11,14 @@
   -webkit-app-region: no-drag;
 }
 
+.app-titlebar a {
+  -webkit-app-region: no-drag;
+}
+
+.app-titlebar button {
+  -webkit-app-region: no-drag;
+}
+
 .app-window-controls button {
   display: flex;
   width: 46px;

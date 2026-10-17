@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -85,6 +85,11 @@ ipcMain.handle("app:check-updates", async (event) => {
     tag: release.tag_name,
     publishedAt: release.published_at,
   };
+});
+
+ipcMain.handle("app:open-repository", (event) => {
+  if (!isTrustedSender(event)) throw new Error("Untrusted repository open request");
+  return shell.openExternal("https://github.com/tuhin733/DocStich");
 });
 
 function createWindow() {

@@ -1,6 +1,8 @@
 # DocStitch
 
-DocStitch arranges document and ID-card images on A4 pages and exports them as a print-ready PDF. It runs in a browser during development and can be packaged as a Windows desktop app.
+DocStich is a Windows application designed to simplify document image arrangement and printing. It helps online service center operators combine the front and back sides of documents, such as Aadhaar cards and voter IDs, onto a single A4 page.
+
+Built to solve everyday problems faced by shopkeepers, DocStich makes preparing documents for government portal uploads and customer photocopies faster, easier, and more convenient.
 
 ## Features
 
