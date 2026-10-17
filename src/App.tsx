@@ -172,14 +172,14 @@ function App() {
           <div className="flex h-full items-center">
             <button
               type="button"
-              aria-label="Donation"
+              aria-label="Donate"
               aria-haspopup="dialog"
-              title="Donation"
+              title="Donate"
               className="group mx-2 flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-100 hover:text-rose-700"
               onClick={() => setShowDonationDialog(true)}
             >
               <Heart className="h-3.5 w-3.5 transition-all group-hover:fill-current" aria-hidden="true" />
-              Donation
+              Donate
             </button>
             <a
               href="https://github.com/tuhin733/DocStich"
