@@ -1,7 +1,7 @@
 {
   "name": "docstitch",
   "private": true,
-  "version": "1.1.2",
+  "version": "1.2.0",
   "author": "Naim Sarkar",
   "type": "module",
   "main": "electron/main.cjs",
