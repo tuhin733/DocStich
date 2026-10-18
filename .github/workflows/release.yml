@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: windows-latest
@@ -35,7 +39,34 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Build and publish Windows installer
-        run: npm run electron:build -- --publish always
+      - name: Build Windows installer
+        run: npm run electron:build -- --publish never
+
+      - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          gh release view $tag --json tagName *> $null
+          if ($LASTEXITCODE -ne 0) {
+            $version = $tag -replace '^v', ''
+            gh release create $tag --verify-tag --title $version --generate-notes
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to create GitHub release $tag"
+            }
+          }
+
+          $assets = @(
+            Get-ChildItem -Path release -File |
+              Where-Object { $_.Name -match '\.(exe|blockmap)$' -or $_.Name -eq 'latest.yml' } |
+              ForEach-Object { $_.FullName }
+          )
+          if (-not ($assets | Where-Object { $_ -match '\.exe$' })) {
+            throw "No Windows installer was produced for $tag"
+          }
+
+          gh release upload $tag $assets --clobber
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to upload release assets for $tag"
+          }
