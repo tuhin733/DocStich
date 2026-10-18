@@ -161,6 +161,7 @@ function App() {
   };
 
   const handleDeletePage = (pageIndex: number) => {
+    if (pageIndex === 0) return;
     deletePage(pageIndex);
     setActivePageIndex((current) =>
       current > pageIndex

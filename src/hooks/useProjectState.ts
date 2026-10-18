@@ -11,7 +11,7 @@ const genId = () => `doc-${Date.now()}-${++idCounter}`;
 
 export function useProjectState() {
   const [docs, setDocs] = useState<UploadedDoc[]>([]);
-  const [blankPageCount, setBlankPageCount] = useState(0);
+  const [blankPageCount, setBlankPageCount] = useState(1);
   const [settings, setSettings] = useState<LayoutSettings>(DEFAULT_LAYOUT);
   const [busy, setBusy] = useState(false);
   const [arrangeMode, setArrangeMode] = useState(false);
@@ -34,7 +34,11 @@ export function useProjectState() {
       if (restored) {
         setSettings(restored.settings);
         setDocs(restored.docs);
-        setBlankPageCount(restored.blankPageCount);
+        setBlankPageCount(
+          restored.docs.length === 0
+            ? Math.max(1, restored.blankPageCount)
+            : restored.blankPageCount,
+        );
       }
 
       hasHydratedProjectRef.current = true;
@@ -314,7 +318,7 @@ export function useProjectState() {
   const clearAllDocs = useCallback(() => {
     docs.forEach((doc) => URL.revokeObjectURL(doc.url));
     setDocs([]);
-    setBlankPageCount(0);
+    setBlankPageCount(1);
     clearProject();
   }, [docs]);
 

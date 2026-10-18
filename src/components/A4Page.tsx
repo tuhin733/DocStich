@@ -355,8 +355,9 @@ export default function A4Page({
                         <button
                           type="button"
                           role="menuitem"
+                          disabled={pageIdx === 0}
                           onClick={() => setConfirmDeletePageIndex(pageIdx)}
-                          className="flex min-h-8 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-red-600 hover:bg-red-50"
+                          className="flex min-h-8 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                           Delete page
@@ -425,9 +426,10 @@ export default function A4Page({
           <button
             type="button"
             onClick={onAddPage}
-            className="mb-2 flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50/60 px-5 text-xs font-semibold text-teal-700 transition-colors hover:border-teal-300 hover:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
+            aria-label="Add a blank page"
+            className="group mb-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 shadow-sm transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 active:bg-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="h-4 w-4 text-teal-600 transition-colors group-hover:text-teal-700" />
             Add page
           </button>
         </div>
