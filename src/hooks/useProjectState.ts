@@ -57,7 +57,7 @@ export function useProjectState() {
   }, [showExportToast]);
 
   const addFiles = useCallback(
-    async (files: File[]) => {
+    async (files: File[], targetPageIndex?: number) => {
       setImportError("");
       const results = await Promise.allSettled(
         files.map(
@@ -94,7 +94,87 @@ export function useProjectState() {
       );
 
       if (loadedDocs.length) {
-        setDocs((prev) => [...prev, ...loadedDocs]);
+        const currentPages = paginate(docs, settings, blankPageCount).pages;
+        const fillsTrailingBlankPage =
+          targetPageIndex !== undefined &&
+          targetPageIndex >= currentPages.length - blankPageCount &&
+          targetPageIndex < currentPages.length &&
+          currentPages[targetPageIndex].length === 0;
+
+        setDocs((prev) => {
+          if (targetPageIndex === undefined) {
+            return [...prev, ...loadedDocs];
+          }
+
+          const pages = paginate(prev, settings, blankPageCount).pages;
+          const resolvedPageIndex = Math.min(
+            Math.max(0, targetPageIndex),
+            pages.length - 1,
+          );
+          const targetPage = pages[resolvedPageIndex] ?? [];
+          const targetDocIds = new Set(
+            targetPage.map(({ doc }) => doc.id),
+          );
+          const lastTargetDocIndex = prev.reduce(
+            (lastIndex, doc, index) =>
+              targetDocIds.has(doc.id) ? index : lastIndex,
+            -1,
+          );
+          if (lastTargetDocIndex >= 0) {
+            const insertAt = lastTargetDocIndex + 1;
+            return [
+              ...prev.slice(0, insertAt),
+              ...loadedDocs,
+              ...prev.slice(insertAt),
+            ];
+          }
+
+          const nextPage = pages
+            .slice(resolvedPageIndex + 1)
+            .find((page) => page.length > 0);
+          const nextDocId = nextPage?.[0].doc.id;
+          const nextDocIndex = nextDocId
+            ? prev.findIndex((doc) => doc.id === nextDocId)
+            : -1;
+          const previousPopulatedPage = pages
+            .slice(0, resolvedPageIndex)
+            .map((page, index) => (page.length > 0 ? index : -1))
+            .reduce((lastIndex, index) => Math.max(lastIndex, index), -1);
+          const pageBreakCount =
+            previousPopulatedPage >= 0
+              ? resolvedPageIndex - previousPopulatedPage
+              : resolvedPageIndex === 0
+                ? 0
+                : resolvedPageIndex + 1;
+          const insertedDocs = loadedDocs.map((doc, index) => ({
+            ...doc,
+            pageBreakBefore:
+              index === 0 && pageBreakCount > 0
+                ? pageBreakCount
+                : undefined,
+          }));
+          const insertAt = nextDocIndex < 0 ? prev.length : nextDocIndex;
+          const nextPageBreakCount =
+            nextDocIndex < 0
+              ? undefined
+              : Math.max(1, pages.findIndex((page) => page === nextPage) - resolvedPageIndex);
+          const updatedPrev =
+            nextDocIndex < 0
+              ? prev
+              : prev.map((doc, index) =>
+                  index === nextDocIndex
+                    ? { ...doc, pageBreakBefore: nextPageBreakCount }
+                    : doc,
+                );
+          return [
+            ...updatedPrev.slice(0, insertAt),
+            ...insertedDocs,
+            ...updatedPrev.slice(insertAt),
+          ];
+        });
+        if (fillsTrailingBlankPage) {
+          setBlankPageCount((count) => Math.max(0, count - 1));
+        }
       }
 
       const failedFiles = results.flatMap((result, index) =>
@@ -107,7 +187,7 @@ export function useProjectState() {
         );
       }
     },
-    [defaultCategory],
+    [blankPageCount, defaultCategory, docs, settings],
   );
 
   const removeDoc = useCallback((id: string) => {
@@ -242,28 +322,110 @@ export function useProjectState() {
     setBlankPageCount((count) => count + 1);
   }, []);
 
+  const commitPageGroups = useCallback((pageGroups: UploadedDoc[][]) => {
+    const nextDocs: UploadedDoc[] = [];
+    let lastPopulatedPage = -1;
+
+    pageGroups.forEach((pageDocs, pageIndex) => {
+      if (pageDocs.length === 0) return;
+
+      const pageBreakCount =
+        lastPopulatedPage < 0
+          ? pageIndex
+          : pageIndex - lastPopulatedPage;
+      pageDocs.forEach((doc, docIndex) => {
+        nextDocs.push({
+          ...doc,
+          pageBreakBefore:
+            docIndex === 0 && pageBreakCount > 0
+              ? pageBreakCount
+              : undefined,
+        });
+      });
+      lastPopulatedPage = pageIndex;
+    });
+
+    setDocs(nextDocs);
+    setBlankPageCount(
+      Math.max(0, pageGroups.length - lastPopulatedPage - 1),
+    );
+  }, []);
+
+  const getCurrentPageGroups = useCallback(
+    () =>
+      paginate(docs, settings, blankPageCount).pages.map((page) =>
+        page.map(({ doc }) => doc),
+      ),
+    [blankPageCount, docs, settings],
+  );
+
+  const addPageAfter = useCallback(
+    (pageIndex: number) => {
+      const pageGroups = getCurrentPageGroups();
+      if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= pageGroups.length) {
+        return;
+      }
+      pageGroups.splice(pageIndex + 1, 0, []);
+      commitPageGroups(pageGroups);
+    },
+    [commitPageGroups, getCurrentPageGroups],
+  );
+
+  const duplicatePage = useCallback(
+    (pageIndex: number) => {
+      const pageGroups = getCurrentPageGroups();
+      if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= pageGroups.length) {
+        return;
+      }
+
+      const copies = pageGroups[pageIndex].map((doc) => ({
+        ...doc,
+        id: genId(),
+        url: URL.createObjectURL(doc.file),
+        label: `${doc.label} (copy)`,
+        pageBreakBefore: undefined,
+      }));
+      pageGroups.splice(pageIndex + 1, 0, copies);
+      commitPageGroups(pageGroups);
+    },
+    [commitPageGroups, getCurrentPageGroups],
+  );
+
+  const movePage = useCallback(
+    (pageIndex: number, direction: -1 | 1) => {
+      const pageGroups = getCurrentPageGroups();
+      const destination = pageIndex + direction;
+      if (
+        !Number.isInteger(pageIndex) ||
+        pageIndex < 0 ||
+        pageIndex >= pageGroups.length ||
+        destination < 0 ||
+        destination >= pageGroups.length
+      ) {
+        return;
+      }
+
+      [pageGroups[pageIndex], pageGroups[destination]] = [
+        pageGroups[destination],
+        pageGroups[pageIndex],
+      ];
+      commitPageGroups(pageGroups);
+    },
+    [commitPageGroups, getCurrentPageGroups],
+  );
+
   const deletePage = useCallback(
     (pageIndex: number) => {
-      const pages = paginate(docs, settings, blankPageCount).pages;
-      if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= pages.length) {
+      const pageGroups = getCurrentPageGroups();
+      if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= pageGroups.length) {
         return;
       }
 
-      const firstBlankPageIndex = pages.length - blankPageCount;
-      if (pageIndex >= firstBlankPageIndex) {
-        setBlankPageCount((count) => Math.max(0, count - 1));
-        return;
-      }
-
-      const pageDocIds = new Set(pages[pageIndex].map(({ doc }) => doc.id));
-      setDocs((previousDocs) => {
-        previousDocs.forEach((doc) => {
-          if (pageDocIds.has(doc.id)) URL.revokeObjectURL(doc.url);
-        });
-        return previousDocs.filter((doc) => !pageDocIds.has(doc.id));
-      });
+      pageGroups[pageIndex].forEach((doc) => URL.revokeObjectURL(doc.url));
+      pageGroups.splice(pageIndex, 1);
+      commitPageGroups(pageGroups);
     },
-    [blankPageCount, docs, settings],
+    [commitPageGroups, getCurrentPageGroups],
   );
 
   const handleExport = useCallback(() => {
@@ -324,6 +486,9 @@ export function useProjectState() {
     setDocs,
     addFiles,
     addPage,
+    addPageAfter,
+    duplicatePage,
+    movePage,
     deletePage,
     removeDoc,
     duplicateDoc,

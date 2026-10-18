@@ -58,8 +58,8 @@ npm run electron:build
 
 Push a version tag such as `v1.0.0` to build the Windows installer and publish
 it as a GitHub release. The release workflow runs the type-check, lint, and
-tests before packaging the app. The desktop app shows the latest release
-version and publication date when an update is available.
+tests before packaging the app. The desktop app shows an update notification on the home screen and provides a
+download link both there and in the About dialog when a newer release is available.
 
 ```sh
 git tag v1.0.0

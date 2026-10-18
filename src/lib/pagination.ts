@@ -95,6 +95,14 @@ export function paginate(
   };
 
   for (const doc of docs) {
+    const pageBreakCount = Math.max(0, Math.floor(doc.pageBreakBefore ?? 0));
+    if (pageBreakCount > 0) {
+      flushPage();
+      for (let index = 1; index < pageBreakCount; index++) {
+        pages.push([]);
+      }
+    }
+
     if (doc.category === "document") {
       flushPage();
       const fitScale = Math.min(usableW / doc.pxW, usableH / doc.pxH);

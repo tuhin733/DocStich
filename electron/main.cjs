@@ -72,11 +72,27 @@ ipcMain.handle("app:check-updates", async (event) => {
   }
 
   const release = await response.json();
+  const releasePageUrl = release.html_url;
+  const installerUrl = Array.isArray(release.assets)
+    ? release.assets.find(
+        (asset) =>
+          typeof asset.name === "string" &&
+          /\.exe$/i.test(asset.name) &&
+          typeof asset.browser_download_url === "string" &&
+          asset.browser_download_url.startsWith(
+            "https://github.com/tuhin733/DocStich/releases/download/",
+          ),
+      )?.browser_download_url
+    : undefined;
   if (
     typeof release.tag_name !== "string" ||
     !/^v?\d+\.\d+\.\d+$/.test(release.tag_name) ||
     typeof release.published_at !== "string" ||
-    Number.isNaN(Date.parse(release.published_at))
+    Number.isNaN(Date.parse(release.published_at)) ||
+    typeof releasePageUrl !== "string" ||
+    !releasePageUrl.startsWith(
+      "https://github.com/tuhin733/DocStich/releases/tag/",
+    )
   ) {
     throw new Error("The latest GitHub release has invalid metadata");
   }
@@ -84,7 +100,21 @@ ipcMain.handle("app:check-updates", async (event) => {
   return {
     tag: release.tag_name,
     publishedAt: release.published_at,
+    downloadUrl: installerUrl || releasePageUrl,
   };
+});
+
+ipcMain.handle("app:open-download", (event, downloadUrl) => {
+  if (!isTrustedSender(event)) throw new Error("Untrusted update download request");
+  if (
+    typeof downloadUrl !== "string" ||
+    !/^https:\/\/github\.com\/tuhin733\/DocStich\/releases\/(?:download|tag)\//.test(
+      downloadUrl,
+    )
+  ) {
+    throw new TypeError("Invalid update download URL");
+  }
+  return shell.openExternal(downloadUrl);
 });
 
 ipcMain.handle("app:open-repository", (event) => {

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { LayoutSettings } from "../types";
 import {
   Sliders,
@@ -13,7 +12,6 @@ import {
   RotateCcw,
   FileText,
 } from "lucide-react";
-import PageManagerDialog from "./PageManagerDialog";
 
 interface Props {
   settings: LayoutSettings;
@@ -23,12 +21,9 @@ interface Props {
   busy: boolean;
   cardCount: number;
   pageCount: number;
-  pageDocumentCounts: number[];
-  onDeletePage: (pageIndex: number) => void;
   arrangeMode: boolean;
   onArrangeModeChange: (enabled: boolean) => void;
   onResetPlacements: () => void;
-  onAddPage: () => void;
 }
 
 export default function ControlPanel({
@@ -39,15 +34,10 @@ export default function ControlPanel({
   busy,
   cardCount,
   pageCount,
-  pageDocumentCounts,
-  onDeletePage,
   arrangeMode,
   onArrangeModeChange,
   onResetPlacements,
-  onAddPage,
 }: Props) {
-  const [showPageManager, setShowPageManager] = useState(false);
-
   return (
     <div className="space-y-3">
       {/* Layout section */}
@@ -59,29 +49,12 @@ export default function ControlPanel({
               Control Panel
             </h3>
           </div>
-          <button
-            type="button"
-            aria-label={`${pageCount} ${pageCount === 1 ? "page" : "pages"}`}
-            aria-haspopup="dialog"
-            aria-expanded={showPageManager}
-            onClick={() => setShowPageManager(true)}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-600 transition-colors hover:border-teal-300 hover:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
-            title="Manage pages"
-          >
-            <FileText className="h-3 w-3 text-teal-600" />
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
+            <FileText className="h-3.5 w-3.5 text-slate-500" />
             <span className="tabular-nums">{pageCount}</span>
             <span>{pageCount === 1 ? "page" : "pages"}</span>
-          </button>
+          </span>
         </div>
-
-        <button
-          type="button"
-          onClick={onAddPage}
-          className="mb-3 flex min-h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50/60 px-2.5 text-xs font-semibold text-teal-700 transition-colors hover:border-teal-300 hover:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add page
-        </button>
 
         <div className="mb-3 flex gap-2">
           <button
@@ -223,13 +196,6 @@ export default function ControlPanel({
           Export PDF
         </button>
       </section>
-      {showPageManager && (
-        <PageManagerDialog
-          pageDocumentCounts={pageDocumentCounts}
-          onDeletePage={onDeletePage}
-          onClose={() => setShowPageManager(false)}
-        />
-      )}
     </div>
   );
 }

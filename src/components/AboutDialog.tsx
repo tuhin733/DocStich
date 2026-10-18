@@ -1,15 +1,13 @@
 import { useEffect } from "react";
-import { X } from "lucide-react";
+import { Download, X } from "lucide-react";
+import type { UpdateStatus } from "../types";
 
 interface Props {
   onClose: () => void;
   hasDesktopAPI: boolean;
-  updateStatus:
-    | { state: "checking" }
-    | { state: "available"; tag: string; publishedAt: string }
-    | { state: "current"; tag: string; publishedAt: string }
-    | { state: "error" };
+  updateStatus: UpdateStatus;
   onCheckUpdates: () => void;
+  onOpenDownload: (url: string) => void;
 }
 
 export default function AboutDialog({
@@ -17,6 +15,7 @@ export default function AboutDialog({
   hasDesktopAPI,
   updateStatus,
   onCheckUpdates,
+  onOpenDownload,
 }: Props) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -90,6 +89,22 @@ export default function AboutDialog({
                 ? "Checking…"
                 : "Check for updates"}
             </button>
+          )}
+          {updateStatus.state === "available" && (
+            <a
+              href={updateStatus.downloadUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mx-auto mt-2 inline-flex items-center gap-1 rounded-md bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-teal-800"
+              onClick={(event) => {
+                if (!hasDesktopAPI) return;
+                event.preventDefault();
+                onOpenDownload(updateStatus.downloadUrl);
+              }}
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              Download update
+            </a>
           )}
         </div>
         <div className="mt-5 grid grid-cols-1 gap-4 text-left sm:grid-cols-2">

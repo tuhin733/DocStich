@@ -2,8 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import type { PointerEvent, WheelEvent } from "react";
 import type { LayoutSettings, UploadedDoc } from "../types";
 import { A4 } from "../types";
-import { paginate } from "../lib/pagination";
-import { FileText } from "lucide-react";
+import { paginate, type PlacedDoc } from "../lib/pagination";
+import {
+  ArrowDown,
+  ArrowUp,
+  Copy,
+  FileText,
+  Plus,
+  Trash2,
+} from "lucide-react";
 
 interface Props {
   docs: UploadedDoc[];
@@ -14,6 +21,13 @@ interface Props {
     placement: NonNullable<UploadedDoc["placement"]>,
   ) => void;
   arrangeMode: boolean;
+  onAddPage: () => void;
+  onAddPageAfter: (pageIndex: number) => void;
+  onDuplicatePage: (pageIndex: number) => void;
+  onDeletePage: (pageIndex: number) => void;
+  onMovePage: (pageIndex: number, direction: -1 | 1) => void;
+  activePageIndex: number;
+  onPageSelect: (pageIndex: number) => void;
 }
 
 type Placement = NonNullable<UploadedDoc["placement"]>;
@@ -37,18 +51,26 @@ export default function A4Page({
   blankPageCount,
   onPlacementChange,
   arrangeMode,
+  onAddPage,
+  onAddPageAfter,
+  onDuplicatePage,
+  onDeletePage,
+  onMovePage,
+  activePageIndex,
+  onPageSelect,
 }: Props) {
   const { pages } = paginate(docs, settings, blankPageCount);
-  const [pageIdx, setPageIdx] = useState(0);
   const [scale, setScale] = useState(1.8);
   const [maxScale, setMaxScale] = useState(MAX_SCALE);
+  const [pageContextMenu, setPageContextMenu] = useState<{
+    pageIndex: number;
+    left: number;
+    top: number;
+  } | null>(null);
+  const [confirmDeletePageIndex, setConfirmDeletePageIndex] = useState<number | null>(null);
   const interaction = useRef<Interaction | null>(null);
   const previewViewport = useRef<HTMLDivElement>(null);
-  const pageScrollDelta = useRef(0);
-
-  const activePageIdx = Math.min(pageIdx, Math.max(0, pages.length - 1));
-  const currentPage = pages[activePageIdx] ?? [];
-  const hasPages = pages.length > 0;
+  const previousBlankPageCount = useRef(blankPageCount);
 
   const sheetW = A4.w * scale;
   const sheetH = A4.h * scale;
@@ -72,43 +94,31 @@ export default function A4Page({
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (blankPageCount > previousBlankPageCount.current) {
+      const viewport = previewViewport.current;
+      viewport?.scrollTo({
+        top: viewport.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+    previousBlankPageCount.current = blankPageCount;
+  }, [blankPageCount]);
+
   const handlePreviewWheel = (event: WheelEvent<HTMLDivElement>) => {
-    if (event.deltaY === 0) return;
-
-    if (event.ctrlKey) {
-      event.preventDefault();
-      setScale((currentScale) =>
-        Math.max(
-          Math.min(MIN_SCALE, maxScale),
-          Math.min(maxScale, currentScale * Math.exp(-event.deltaY * 0.001)),
-        ),
-      );
-      return;
-    }
-
-    if (pages.length < 2) return;
-    const direction = Math.sign(event.deltaY);
-    if (
-      (direction < 0 && activePageIdx === 0) ||
-      (direction > 0 && activePageIdx >= pages.length - 1)
-    ) {
-      pageScrollDelta.current = 0;
-      return;
-    }
-
+    if (!event.ctrlKey || event.deltaY === 0) return;
     event.preventDefault();
-    pageScrollDelta.current += event.deltaY;
-    if (Math.abs(pageScrollDelta.current) >= 80) {
-      setPageIdx((current) =>
-        Math.max(0, Math.min(pages.length - 1, current + direction)),
-      );
-      pageScrollDelta.current = 0;
-    }
+    setScale((currentScale) =>
+      Math.max(
+        Math.min(MIN_SCALE, maxScale),
+        Math.min(maxScale, currentScale * Math.exp(-event.deltaY * 0.001)),
+      ),
+    );
   };
 
   const beginInteraction = (
     event: PointerEvent<HTMLElement>,
-    placed: (typeof currentPage)[number],
+    placed: PlacedDoc,
     kind: Interaction["kind"],
   ) => {
     if (!arrangeMode) return;
@@ -160,19 +170,9 @@ export default function A4Page({
     interaction.current = null;
   };
 
-  useEffect(() => {
-    setPageIdx((currentPageIdx) =>
-      Math.min(currentPageIdx, Math.max(0, pages.length - 1)),
-    );
-  }, [pages.length]);
-
-  useEffect(() => {
-    if (blankPageCount > 0) setPageIdx(pages.length - 1);
-  }, [blankPageCount, pages.length]);
-
   const resizeByKeyboard = (
     event: React.KeyboardEvent<HTMLButtonElement>,
-    placed: (typeof currentPage)[number],
+    placed: PlacedDoc,
   ) => {
     if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
       return;
@@ -206,28 +206,168 @@ export default function A4Page({
         aria-label="Scrollable A4 preview"
         tabIndex={0}
         onWheel={handlePreviewWheel}
+        onClick={() => {
+          setPageContextMenu(null);
+          setConfirmDeletePageIndex(null);
+        }}
+        onScroll={() => {
+          setPageContextMenu(null);
+          setConfirmDeletePageIndex(null);
+        }}
         onKeyDown={(event) => {
-          if (event.target !== event.currentTarget || pages.length < 2) return;
-          if (event.key === "ArrowLeft") {
-            event.preventDefault();
-            setPageIdx((current) => Math.max(0, current - 1));
-          } else if (event.key === "ArrowRight") {
-            event.preventDefault();
-            setPageIdx((current) => Math.min(pages.length - 1, current + 1));
+          if (event.key === "Escape") {
+            setPageContextMenu(null);
+            setConfirmDeletePageIndex(null);
           }
         }}
       >
-        <div className="flex w-max min-w-full justify-center p-2">
-          {hasPages ? (
+        <div className="flex w-full flex-col items-center gap-6 p-2">
+          {pages.map((page, pageIdx) => (
             <div
-              className="relative shrink-0 bg-white shadow-xl ring-1 ring-slate-200"
+              key={pageIdx}
+              onClick={() => {
+                onPageSelect(pageIdx);
+                setPageContextMenu(null);
+                setConfirmDeletePageIndex(null);
+              }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onPageSelect(pageIdx);
+                setConfirmDeletePageIndex(null);
+                const bounds = event.currentTarget.getBoundingClientRect();
+                const menuWidth = 176;
+                const menuHeight = 168;
+                setPageContextMenu({
+                  pageIndex: pageIdx,
+                  left: Math.max(
+                    4,
+                    Math.min(event.clientX - bounds.left, sheetW - menuWidth - 4),
+                  ),
+                  top: Math.max(
+                    4,
+                    Math.min(event.clientY - bounds.top, sheetH - menuHeight - 4),
+                  ),
+                });
+              }}
+              className={`relative shrink-0 bg-white shadow-xl ${
+                activePageIndex === pageIdx
+                  ? "ring-2 ring-teal-500"
+                  : "ring-1 ring-slate-200"
+              }`}
               style={{ width: sheetW, height: sheetH }}
             >
               {/* Sheet shadow / paper texture */}
               <div className="absolute inset-0 bg-gradient-to-br from-white to-slate-50/30" />
 
+              {pageContextMenu?.pageIndex === pageIdx && (
+                <div
+                  role="menu"
+                  aria-label={`Page ${pageIdx + 1} options`}
+                  onClick={(event) => event.stopPropagation()}
+                  className="absolute z-30 w-48 rounded-md border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-slate-900/5"
+                  style={{ left: pageContextMenu.left, top: pageContextMenu.top }}
+                >
+                    {confirmDeletePageIndex === pageIdx ? (
+                        <div className="space-y-1.5 p-1.5">
+                          <p className="text-xs font-medium text-slate-700">
+                          Delete page and its documents?
+                        </p>
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setConfirmDeletePageIndex(null);
+                              setPageContextMenu(null);
+                            }}
+                            className="rounded px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-100"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onDeletePage(pageIdx);
+                              setConfirmDeletePageIndex(null);
+                              setPageContextMenu(null);
+                            }}
+                            className="rounded bg-red-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            onAddPageAfter(pageIdx);
+                            setPageContextMenu(null);
+                          }}
+                          className="flex min-h-8 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-100"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add page after
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            onDuplicatePage(pageIdx);
+                            setPageContextMenu(null);
+                          }}
+                          className="flex min-h-8 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-100"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          Duplicate page
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={pageIdx === 0}
+                          onClick={() => {
+                            onMovePage(pageIdx, -1);
+                            onPageSelect(pageIdx - 1);
+                            setPageContextMenu(null);
+                          }}
+                          className="flex min-h-8 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <ArrowUp className="h-3.5 w-3.5" />
+                          Move page up
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={pageIdx >= pages.length - 1}
+                          onClick={() => {
+                            onMovePage(pageIdx, 1);
+                            onPageSelect(pageIdx + 1);
+                            setPageContextMenu(null);
+                          }}
+                          className="flex min-h-8 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <ArrowDown className="h-3.5 w-3.5" />
+                          Move page down
+                        </button>
+                        <div className="my-1 border-t border-slate-100" />
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => setConfirmDeletePageIndex(pageIdx)}
+                          className="flex min-h-8 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete page
+                        </button>
+                      </>
+                    )}
+                </div>
+              )}
+
               {/* Placed cards */}
-              {currentPage.map((p, i) => (
+              {page.map((p, i) => (
                 <div
                   key={`${p.doc.id}-${i}`}
                   className={`absolute overflow-hidden rounded-sm ${
@@ -270,17 +410,26 @@ export default function A4Page({
               ))}
 
               {/* Page number badge */}
-              <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-md bg-slate-100/80 px-2 py-0.5 text-[10px] font-medium text-slate-400 backdrop-blur">
+              <div
+                className={`absolute bottom-2 right-2 flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium backdrop-blur ${
+                  activePageIndex === pageIdx
+                    ? "bg-teal-100/90 text-teal-700"
+                    : "bg-slate-100/80 text-slate-400"
+                }`}
+              >
                 <FileText className="h-3 w-3" />
-                A4 · {activePageIdx + 1}
+                A4 · {pageIdx + 1}{activePageIndex === pageIdx ? " · Selected" : ""}
               </div>
             </div>
-          ) : (
-            <div
-              className="flex shrink-0 flex-col items-center justify-center bg-white shadow-xl ring-1 ring-slate-200"
-              style={{ width: sheetW, height: sheetH }}
-            />
-          )}
+          ))}
+          <button
+            type="button"
+            onClick={onAddPage}
+            className="mb-2 flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50/60 px-5 text-xs font-semibold text-teal-700 transition-colors hover:border-teal-300 hover:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add page
+          </button>
         </div>
       </div>
 

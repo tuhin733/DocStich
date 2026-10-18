@@ -10,7 +10,12 @@ interface Window {
     minimize(): Promise<void>;
     toggleMaximize(): Promise<void>;
     close(): Promise<void>;
-    checkUpdates(): Promise<{ tag: string; publishedAt: string }>;
+    checkUpdates(): Promise<{
+      tag: string;
+      publishedAt: string;
+      downloadUrl: string;
+    }>;
+    openDownload(url: string): Promise<void>;
     openRepository(): Promise<void>;
     onMaximizeChange(callback: (isMaximized: boolean) => void): () => void;
   };

@@ -38,6 +38,8 @@ export interface UploadedDoc {
   fitToPage: boolean;
   widthMm: number;
   heightMm: number;
+  /** Number of page breaks before this document, used for manual page operations. */
+  pageBreakBefore?: number;
   /** Optional manual position and size on the A4 print sheet. */
   placement?: {
     x: number;
@@ -60,6 +62,12 @@ export interface LayoutSettings {
   cols: number;
   rows: number;
 }
+
+export type UpdateStatus =
+  | { state: "checking" }
+  | { state: "available"; tag: string; publishedAt: string; downloadUrl: string }
+  | { state: "current"; tag: string; publishedAt: string; downloadUrl: string }
+  | { state: "error" };
 
 /** A4 portrait in mm */
 export const A4 = { w: 210, h: 297 } as const;

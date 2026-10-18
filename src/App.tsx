@@ -4,6 +4,7 @@ import {
   Github,
   Heart,
   Info,
+  Download,
   Minus,
   Square,
   Copy,
@@ -20,6 +21,7 @@ import ImageEditor from "./components/ImageEditor";
 import PdfExportDialog from "./components/PdfExportDialog";
 import AboutDialog from "./components/AboutDialog";
 import DonationDialog from "./components/DonationDialog";
+import type { UpdateStatus } from "./types";
 
 function App() {
   const {
@@ -40,6 +42,9 @@ function App() {
     setImportError,
     addFiles,
     addPage,
+    addPageAfter,
+    duplicatePage,
+    movePage,
     deletePage,
     removeDoc,
     duplicateDoc,
@@ -59,14 +64,12 @@ function App() {
   } = useProjectState();
 
   const [isMaximized, setIsMaximized] = useState(false);
+  const [activePageIndex, setActivePageIndex] = useState(0);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showDonationDialog, setShowDonationDialog] = useState(false);
-  const [updateStatus, setUpdateStatus] = useState<
-    | { state: "checking" }
-    | { state: "available"; tag: string; publishedAt: string }
-    | { state: "current"; tag: string; publishedAt: string }
-    | { state: "error" }
-  >({ state: "checking" });
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
+    state: "checking",
+  });
   const desktopAPI = window.desktopAPI;
 
   const checkForUpdates = useCallback(async () => {
@@ -98,6 +101,7 @@ function App() {
         state: hasNewerVersion ? "available" : "current",
         tag: latestRelease.tag,
         publishedAt: latestRelease.publishedAt,
+        downloadUrl: latestRelease.downloadUrl,
       });
     } catch (error) {
       console.error("Unable to check for updates", error);
@@ -134,6 +138,36 @@ function App() {
     [blankPageCount, docs, settings],
   );
   const pageCount = pages.length;
+
+  useEffect(() => {
+    setActivePageIndex((current) =>
+      Math.min(current, Math.max(0, pageCount - 1)),
+    );
+  }, [pageCount]);
+
+  const handleAddPage = () => {
+    setActivePageIndex(pageCount);
+    addPage();
+  };
+
+  const handleAddPageAfter = (pageIndex: number) => {
+    addPageAfter(pageIndex);
+    setActivePageIndex(pageIndex + 1);
+  };
+
+  const handleDuplicatePage = (pageIndex: number) => {
+    duplicatePage(pageIndex);
+    setActivePageIndex(pageIndex + 1);
+  };
+
+  const handleDeletePage = (pageIndex: number) => {
+    deletePage(pageIndex);
+    setActivePageIndex((current) =>
+      current > pageIndex
+        ? current - 1
+        : Math.max(0, Math.min(current, pageCount - 2)),
+    );
+  };
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -239,8 +273,36 @@ function App() {
           </div>
         </header>
 
-        <main className="relative min-h-0 flex-1 overflow-hidden">
-          <div className="mx-auto h-full max-w-7xl px-3 sm:px-4">
+        <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+          {updateStatus.state === "available" && (
+            <div
+              className="z-10 flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-2 border-b border-teal-200 bg-teal-50 px-4 py-2 text-center text-sm text-teal-900"
+              role="status"
+              aria-live="polite"
+            >
+              <span>
+                DocStitch {updateStatus.tag} is available.
+              </span>
+              <a
+                href={updateStatus.downloadUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 rounded-md bg-teal-700 px-3 py-1 font-semibold text-white transition-colors hover:bg-teal-800"
+                onClick={(event) => {
+                  if (!desktopAPI) return;
+                  event.preventDefault();
+                  void desktopAPI.openDownload(updateStatus.downloadUrl).catch(
+                    (error: unknown) =>
+                      console.error("Unable to open update download", error),
+                  );
+                }}
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                Download update
+              </a>
+            </div>
+          )}
+          <div className="min-h-0 w-full max-w-7xl flex-1 self-center px-3 sm:px-4">
             <div className="grid h-full min-h-0 grid-cols-1 items-stretch gap-4 min-[900px]:grid-cols-[260px_minmax(0,1fr)_240px] lg:grid-cols-[300px_minmax(0,1fr)_260px]">
               <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden py-3">
                 <div>
@@ -272,7 +334,7 @@ function App() {
                 </div>
 
                 <UploadZone
-                  onFiles={addFiles}
+                  onFiles={(files) => addFiles(files, activePageIndex)}
                   documentMode={defaultCategory === "document"}
                   error={importError}
                   onError={setImportError}
@@ -325,6 +387,13 @@ function App() {
                   blankPageCount={blankPageCount}
                   onPlacementChange={changePlacement}
                   arrangeMode={arrangeMode}
+                  onAddPage={handleAddPage}
+                  onAddPageAfter={handleAddPageAfter}
+                  onDuplicatePage={handleDuplicatePage}
+                  onDeletePage={handleDeletePage}
+                  onMovePage={movePage}
+                  activePageIndex={activePageIndex}
+                  onPageSelect={setActivePageIndex}
                 />
               </div>
 
@@ -338,12 +407,9 @@ function App() {
                     busy={busy}
                     cardCount={docs.length}
                     pageCount={pageCount}
-                    pageDocumentCounts={pages.map((page) => page.length)}
-                    onDeletePage={deletePage}
                     arrangeMode={arrangeMode}
                     onArrangeModeChange={setArrangeMode}
                     onResetPlacements={resetPlacements}
-                    onAddPage={addPage}
                   />
                 </div>
               </div>
@@ -406,6 +472,12 @@ function App() {
           updateStatus={updateStatus}
           hasDesktopAPI={Boolean(desktopAPI)}
           onCheckUpdates={() => void checkForUpdates()}
+          onOpenDownload={(url) => {
+            if (!desktopAPI) return;
+            void desktopAPI.openDownload(url).catch((error: unknown) =>
+              console.error("Unable to open update download", error),
+            );
+          }}
         />
       )}
 
