@@ -1,22 +1,11 @@
 import { useEffect } from "react";
-import { Download, X } from "lucide-react";
-import type { UpdateStatus } from "../types";
+import { X } from "lucide-react";
 
 interface Props {
   onClose: () => void;
-  hasDesktopAPI: boolean;
-  updateStatus: UpdateStatus;
-  onCheckUpdates: () => void;
-  onOpenDownload: (url: string) => void;
 }
 
-export default function AboutDialog({
-  onClose,
-  hasDesktopAPI,
-  updateStatus,
-  onCheckUpdates,
-  onOpenDownload,
-}: Props) {
+export default function AboutDialog({ onClose }: Props) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -62,51 +51,6 @@ export default function AboutDialog({
         <p className="mt-1 text-xs font-medium text-slate-400">
           Version {__APP_VERSION__}
         </p>
-        <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3">
-          <p
-            role="status"
-            aria-live="polite"
-            className="text-xs leading-relaxed text-slate-600"
-          >
-            {updateStatus.state === "checking" &&
-              (hasDesktopAPI
-                ? "Checking for updates…"
-                : "Version " + __APP_VERSION__)}
-            {updateStatus.state === "available" &&
-              `Update available: ${updateStatus.tag} · released ${new Date(updateStatus.publishedAt).toLocaleDateString()}`}
-            {updateStatus.state === "current" &&
-              `Up to date · latest ${updateStatus.tag} released ${new Date(updateStatus.publishedAt).toLocaleDateString()}`}
-            {updateStatus.state === "error" && "Couldn't check for updates"}
-          </p>
-          {hasDesktopAPI && (
-            <button
-              type="button"
-              onClick={onCheckUpdates}
-              disabled={updateStatus.state === "checking"}
-              className="mt-2 rounded-md px-2 py-1 text-xs font-semibold text-teal-700 transition-colors hover:bg-teal-50 hover:text-teal-800 disabled:cursor-wait disabled:opacity-60"
-            >
-              {updateStatus.state === "checking"
-                ? "Checking…"
-                : "Check for updates"}
-            </button>
-          )}
-          {updateStatus.state === "available" && (
-            <a
-              href={updateStatus.downloadUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mx-auto mt-2 inline-flex items-center gap-1 rounded-md bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-teal-800"
-              onClick={(event) => {
-                if (!hasDesktopAPI) return;
-                event.preventDefault();
-                onOpenDownload(updateStatus.downloadUrl);
-              }}
-            >
-              <Download className="h-3.5 w-3.5" aria-hidden="true" />
-              Download update
-            </a>
-          )}
-        </div>
         <div className="mt-5 grid grid-cols-1 gap-4 text-left sm:grid-cols-2">
           <section className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
             <h3 className="text-sm font-bold text-slate-800">

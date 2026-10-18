@@ -250,14 +250,14 @@ export default function A4Page({
                   ),
                 });
               }}
-              className={`relative shrink-0 bg-white shadow-xl ${
+              className={`relative shrink-0 bg-white shadow-lg ${
                 activePageIndex === pageIdx
                   ? "ring-2 ring-teal-500"
                   : "ring-1 ring-slate-200"
               }`}
               style={{ width: sheetW, height: sheetH }}
             >
-              {/* Sheet shadow / paper texture */}
+              {/* Paper texture */}
               <div className="absolute inset-0 bg-gradient-to-br from-white to-slate-50/30" />
 
               {pageContextMenu?.pageIndex === pageIdx && (

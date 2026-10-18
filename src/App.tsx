@@ -200,10 +200,37 @@ function App() {
             <h1 className="text-sm font-bold tracking-tight text-slate-800">
               Doc<span className="text-teal-600">Stitch</span>
             </h1>
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-              v{__APP_VERSION__}
-            </span>
           </div>
+          {updateStatus.state === "available" && (
+            <div className="flex min-w-0 flex-1 justify-center px-2">
+              <div
+                className="flex min-w-0 items-center gap-2 px-2.5 py-1 text-[11px] text-teal-900"
+                role="status"
+                aria-live="polite"
+              >
+                <span className="truncate text-[11px] text-slate-600">
+                  DocStitch {updateStatus.tag} is available.
+                </span>
+                <a
+                  href={updateStatus.downloadUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1 rounded bg-teal-700 px-2 py-1 font-semibold text-white transition-colors hover:bg-teal-800"
+                  onClick={(event) => {
+                    if (!desktopAPI) return;
+                    event.preventDefault();
+                    void desktopAPI.openDownload(updateStatus.downloadUrl).catch(
+                      (error: unknown) =>
+                        console.error("Unable to open update download", error),
+                    );
+                  }}
+                >
+                  <Download className="h-3 w-3" aria-hidden="true" />
+                  Download
+                </a>
+              </div>
+            </div>
+          )}
           <div className="flex h-full items-center">
             <button
               type="button"
@@ -275,34 +302,6 @@ function App() {
         </header>
 
         <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-          {updateStatus.state === "available" && (
-            <div
-              className="z-10 flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-2 border-b border-teal-200 bg-teal-50 px-4 py-2 text-center text-sm text-teal-900"
-              role="status"
-              aria-live="polite"
-            >
-              <span>
-                DocStitch {updateStatus.tag} is available.
-              </span>
-              <a
-                href={updateStatus.downloadUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 rounded-md bg-teal-700 px-3 py-1 font-semibold text-white transition-colors hover:bg-teal-800"
-                onClick={(event) => {
-                  if (!desktopAPI) return;
-                  event.preventDefault();
-                  void desktopAPI.openDownload(updateStatus.downloadUrl).catch(
-                    (error: unknown) =>
-                      console.error("Unable to open update download", error),
-                  );
-                }}
-              >
-                <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                Download update
-              </a>
-            </div>
-          )}
           <div className="min-h-0 w-full max-w-7xl flex-1 self-center px-3 sm:px-4">
             <div className="grid h-full min-h-0 grid-cols-1 items-stretch gap-4 min-[900px]:grid-cols-[260px_minmax(0,1fr)_240px] lg:grid-cols-[300px_minmax(0,1fr)_260px]">
               <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden py-3">
@@ -417,7 +416,8 @@ function App() {
             </div>
           </div>
         </main>
-        <footer className="relative z-10 flex h-9 shrink-0 items-center justify-end border-t border-slate-200 bg-white px-3 text-[11px] text-slate-500 shadow-[0_-2px_8px_rgba(15,23,42,0.04)]">
+        <footer className="relative z-10 flex h-9 shrink-0 items-center justify-between border-t border-slate-200 bg-white px-3 text-[11px] text-slate-500 shadow-[0_-2px_8px_rgba(15,23,42,0.04)]">
+          <span className="font-semibold">Version {__APP_VERSION__}</span>
           <button
             type="button"
             aria-label="About DocStitch"
@@ -470,15 +470,6 @@ function App() {
       {showAboutDialog && (
         <AboutDialog
           onClose={() => setShowAboutDialog(false)}
-          updateStatus={updateStatus}
-          hasDesktopAPI={Boolean(desktopAPI)}
-          onCheckUpdates={() => void checkForUpdates()}
-          onOpenDownload={(url) => {
-            if (!desktopAPI) return;
-            void desktopAPI.openDownload(url).catch((error: unknown) =>
-              console.error("Unable to open update download", error),
-            );
-          }}
         />
       )}
 
