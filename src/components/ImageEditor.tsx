@@ -604,6 +604,7 @@ export default function ImageEditor({
   const [cropPreset, setCropPreset] = useState("Free");
   const draggingCorner = useRef<CornerKey | null>(null);
   const draggingEdge = useRef<EdgeKey | null>(null);
+  const draggingCrop = useRef(false);
   const dragOrigin = useRef<{ quad: Quad; x: number; y: number } | null>(null);
 
   const DISPLAY_LIMIT = 600;
@@ -963,6 +964,22 @@ export default function ImageEditor({
     setMagnifierPoint({ ...midpoint, clientX: e.clientX, clientY: e.clientY });
   };
 
+  const onCropPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!quad) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = (e.clientX - rect.left) * displayW / rect.width;
+    const y = (e.clientY - rect.top) * displayH / rect.height;
+    draggingCrop.current = true;
+    draggingCorner.current = null;
+    draggingEdge.current = null;
+    dragOrigin.current = { quad, x, y };
+    setActiveCropHandle(null);
+    setMagnifierPoint(null);
+  };
+
   useEffect(() => {
     if (!cropMode) return;
     const onMove = (e: PointerEvent) => {
@@ -972,6 +989,25 @@ export default function ImageEditor({
       if (!origin) return;
       const pointerX = (e.clientX - rect.left) * displayW / rect.width;
       const pointerY = (e.clientY - rect.top) * displayH / rect.height;
+
+      if (draggingCrop.current) {
+        const deltaX = pointerX - origin.x;
+        const deltaY = pointerY - origin.y;
+        const points = Object.values(origin.quad);
+        const minX = Math.min(...points.map((point) => point.x));
+        const maxX = Math.max(...points.map((point) => point.x));
+        const minY = Math.min(...points.map((point) => point.y));
+        const maxY = Math.max(...points.map((point) => point.y));
+        const boundedX = Math.max(-minX, Math.min(displayW - maxX, deltaX));
+        const boundedY = Math.max(-minY, Math.min(displayH - maxY, deltaY));
+        setQuad({
+          tl: { x: origin.quad.tl.x + boundedX, y: origin.quad.tl.y + boundedY },
+          tr: { x: origin.quad.tr.x + boundedX, y: origin.quad.tr.y + boundedY },
+          br: { x: origin.quad.br.x + boundedX, y: origin.quad.br.y + boundedY },
+          bl: { x: origin.quad.bl.x + boundedX, y: origin.quad.bl.y + boundedY },
+        });
+        return;
+      }
 
       if (draggingCorner.current) {
         const corner = draggingCorner.current;
@@ -1070,6 +1106,7 @@ export default function ImageEditor({
       }
     };
     const onUp = () => {
+      draggingCrop.current = false;
       draggingCorner.current = null;
       draggingEdge.current = null;
       dragOrigin.current = null;
@@ -1351,6 +1388,14 @@ export default function ImageEditor({
                         fill="rgba(15,23,42,0.55)"
                         mask="url(#cropMask)"
                       />
+                      <polygon
+                        points={quadToSvgPoints(quad)}
+                        fill="transparent"
+                        pointerEvents="all"
+                        className="cursor-move"
+                        onPointerDown={onCropPointerDown}
+                        aria-label="Move crop area"
+                      />
                       {/* Quad outline */}
                       <polygon
                         points={quadToSvgPoints(quad)}
@@ -1369,7 +1414,9 @@ export default function ImageEditor({
                         <div
                           key={edge}
                           onPointerDown={(e) => onEdgePointerDown(e, edge)}
-                          className="absolute z-10 flex cursor-grab touch-none items-center justify-center active:cursor-grabbing"
+                          className={`absolute z-10 flex touch-none items-center justify-center ${
+                            edge === "top" || edge === "bottom" ? "cursor-ns-resize" : "cursor-ew-resize"
+                          }`}
                           style={{
                             left: `${(midpoint.x / displayW) * 100}%`,
                             top: `${(midpoint.y / displayH) * 100}%`,
@@ -1391,7 +1438,9 @@ export default function ImageEditor({
                       <div
                         key={key}
                         onPointerDown={(e) => onCornerPointerDown(e, key)}
-                        className="absolute z-20 flex h-6 w-6 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
+                        className={`absolute z-20 flex h-6 w-6 touch-none items-center justify-center ${
+                          key === "tl" || key === "br" ? "cursor-nwse-resize" : "cursor-nesw-resize"
+                        }`}
                         style={{
                           left: `${(quad[key].x / displayW) * 100}%`,
                           top: `${(quad[key].y / displayH) * 100}%`,
