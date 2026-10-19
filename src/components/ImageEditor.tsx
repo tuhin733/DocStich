@@ -11,6 +11,7 @@ import {
   Sun,
   Contrast,
   Droplets,
+  Sliders,
   Type,
   CircleDot,
   ZoomIn,
@@ -512,6 +513,7 @@ export default function ImageEditor({
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState<FilterId>("none");
+  const [fineTuneOpen, setFineTuneOpen] = useState(true);
   const [filterAdjustments, setFilterAdjustments] =
     useState<Partial<Record<FilterId, FineAdjustments>>>({});
   const [savedPresets, setSavedPresets] = useState<SavedAdjustmentPreset[]>([]);
@@ -753,6 +755,7 @@ export default function ImageEditor({
 
   const resetAll = () => {
     setFilter("none");
+    setFineTuneOpen(true);
     setRotation(0);
     setFlipH(false);
     setFlipV(false);
@@ -889,6 +892,7 @@ export default function ImageEditor({
       }
       onApplyToAll(results);
       setFilter("none");
+      setFineTuneOpen(true);
       setFilterAdjustments({});
     } catch (error) {
       for (const { result } of results) URL.revokeObjectURL(result.url);
@@ -1565,7 +1569,12 @@ export default function ImageEditor({
                     >
                       <button
                         type="button"
-                        onClick={() => setFilter(f.id)}
+                        onClick={() => {
+                          if (filter !== f.id) {
+                            setFilter(f.id);
+                            setFineTuneOpen(f.id === "none");
+                          }
+                        }}
                         aria-pressed={filter === f.id}
                         className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors ${
                           filter === f.id ? "bg-teal-50/70" : "hover:bg-slate-50"
@@ -1597,121 +1606,153 @@ export default function ImageEditor({
                       {filter === f.id && (
                         <div className="border-t border-slate-100 px-3 pb-1 pt-3">
                           <div className="mb-2 flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                              Fine tune this filter
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setFilterAdjustments((previous) => ({
-                                ...previous,
-                                [filter]: DEFAULT_FINE_ADJUSTMENTS,
-                              }))}
-                              disabled={
-                                activeAdjustments.brightness === 0 &&
-                                activeAdjustments.contrast === 0 &&
-                                activeAdjustments.saturation === 0
-                              }
-                              className="rounded-md px-2 py-1 text-[10px] font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-default disabled:text-slate-300 disabled:hover:bg-transparent"
-                            >
-                              Reset
-                            </button>
-                          </div>
-                          <AdjustSlider
-                            icon={<Sun className="h-3.5 w-3.5" />}
-                            label="Brightness"
-                            value={activeAdjustments.brightness}
-                            onChange={(value) => updateFilterAdjustment("brightness", value)}
-                          />
-                          <AdjustSlider
-                            icon={<Contrast className="h-3.5 w-3.5" />}
-                            label="Contrast"
-                            value={activeAdjustments.contrast}
-                            onChange={(value) => updateFilterAdjustment("contrast", value)}
-                          />
-                          <AdjustSlider
-                            icon={<Droplets className="h-3.5 w-3.5" />}
-                            label="Saturation"
-                            value={activeAdjustments.saturation}
-                            onChange={(value) => updateFilterAdjustment("saturation", value)}
-                          />
-                          {filter === "none" && (
-                            <div className="mt-3 border-t border-slate-100 pt-3">
-                              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                                Saved adjustments
-                              </p>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  value={savedPresetName}
-                                  onChange={(event) => setSavedPresetName(event.target.value)}
-                                  onKeyDown={(event) => {
-                                    if (event.key === "Enter") saveCurrentPreset();
-                                  }}
-                                  placeholder="Preset name"
-                                  aria-label="Saved adjustment preset name"
-                                  maxLength={40}
-                                  className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={saveCurrentPreset}
-                                  disabled={!savedPresetsLoaded || !savedPresetName.trim()}
-                                  className="shrink-0 rounded-md border border-teal-200 px-2.5 py-1.5 text-[11px] font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  Save
-                                </button>
-                              </div>
-                              {savedPresets.length > 0 && (
-                                <div className="mt-2 space-y-1">
-                                  {savedPresets.map((preset) => (
-                                    <div
-                                      key={preset.id}
-                                      className="flex items-center gap-1"
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={() => setFilterAdjustments((previous) => ({
-                                          ...previous,
-                                          none: { ...preset.adjustments },
-                                        }))}
-                                        className="min-w-0 flex-1 truncate rounded px-2 py-1 text-left text-xs font-medium text-slate-600 hover:bg-teal-50 hover:text-teal-700"
-                                        title={`Apply ${preset.name}`}
-                                      >
-                                        {preset.name}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => persistSavedPresets(
-                                          savedPresets.filter((item) => item.id !== preset.id),
-                                        )}
-                                        aria-label={`Delete ${preset.name} preset`}
-                                        title={`Delete ${preset.name}`}
-                                        className="rounded px-2 py-1 text-[10px] font-medium text-slate-400 hover:bg-red-50 hover:text-red-600"
-                                      >
-                                        Delete
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              {presetError && (
-                                <p className="mt-2 text-[10px] text-red-600" role="alert">
-                                  {presetError}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                          {docs.length > 1 && (
-                            <div className="mt-2 flex justify-end">
+                            {filter === "none" && (
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                                Fine tune this filter
+                              </span>
+                            )}
+                            {(filter === "none" || fineTuneOpen) && (
                               <button
                                 type="button"
-                                onClick={handleApplyFilterToAll}
-                                disabled={saving || !hasFilterChanges}
-                                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-semibold text-teal-700 transition-colors hover:bg-teal-50 disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent"
+                                onClick={() => setFilterAdjustments((previous) => ({
+                                  ...previous,
+                                  [filter]: DEFAULT_FINE_ADJUSTMENTS,
+                                }))}
+                                disabled={
+                                  activeAdjustments.brightness === 0 &&
+                                  activeAdjustments.contrast === 0 &&
+                                  activeAdjustments.saturation === 0
+                                }
+                                className="rounded-md px-2 py-1 text-[10px] font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-default disabled:text-slate-300 disabled:hover:bg-transparent"
                               >
-                                <CheckCheck className="h-4 w-4" />
-                                {applyingToAll ? "Applying…" : "Apply to all images"}
+                                Reset
                               </button>
+                            )}
+                          </div>
+                          <div
+                            id={`filter-adjustments-${filter}`}
+                            hidden={filter !== "none" && !fineTuneOpen}
+                          >
+                            <AdjustSlider
+                              icon={<Sun className="h-3.5 w-3.5" />}
+                              label="Brightness"
+                              value={activeAdjustments.brightness}
+                              onChange={(value) => updateFilterAdjustment("brightness", value)}
+                            />
+                            <AdjustSlider
+                              icon={<Contrast className="h-3.5 w-3.5" />}
+                              label="Contrast"
+                              value={activeAdjustments.contrast}
+                              onChange={(value) => updateFilterAdjustment("contrast", value)}
+                            />
+                            <AdjustSlider
+                              icon={<Droplets className="h-3.5 w-3.5" />}
+                              label="Saturation"
+                              value={activeAdjustments.saturation}
+                              onChange={(value) => updateFilterAdjustment("saturation", value)}
+                            />
+                            {filter === "none" && (
+                              <div className="mt-3 border-t border-slate-100 pt-3">
+                                <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                                  Saved adjustments
+                                </p>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    value={savedPresetName}
+                                    onChange={(event) => setSavedPresetName(event.target.value)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Enter") saveCurrentPreset();
+                                    }}
+                                    placeholder="Preset name"
+                                    aria-label="Saved adjustment preset name"
+                                    maxLength={40}
+                                    className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={saveCurrentPreset}
+                                    disabled={!savedPresetsLoaded || !savedPresetName.trim()}
+                                    className="shrink-0 rounded-md border border-teal-200 px-2.5 py-1.5 text-[11px] font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Save
+                                  </button>
+                                </div>
+                                {savedPresets.length > 0 && (
+                                  <div className="mt-2 space-y-1">
+                                    {savedPresets.map((preset) => (
+                                      <div
+                                        key={preset.id}
+                                        className="flex items-center gap-1"
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={() => setFilterAdjustments((previous) => ({
+                                            ...previous,
+                                            none: { ...preset.adjustments },
+                                          }))}
+                                          className="min-w-0 flex-1 truncate rounded px-2 py-1 text-left text-xs font-medium text-slate-600 hover:bg-teal-50 hover:text-teal-700"
+                                          title={`Apply ${preset.name}`}
+                                        >
+                                          {preset.name}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => persistSavedPresets(
+                                            savedPresets.filter((item) => item.id !== preset.id),
+                                          )}
+                                          aria-label={`Delete ${preset.name} preset`}
+                                          title={`Delete ${preset.name}`}
+                                          className="rounded px-2 py-1 text-[10px] font-medium text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                        >
+                                          Delete
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {presetError && (
+                                  <p className="mt-2 text-[10px] text-red-600" role="alert">
+                                    {presetError}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          {(filter !== "none" || docs.length > 1) && (
+                            <div
+                              className={`mt-2 flex items-center ${
+                                filter === "none" ? "justify-end" : "justify-between"
+                              }`}
+                            >
+                              {filter !== "none" && (
+                                <button
+                                  type="button"
+                                  onClick={() => setFineTuneOpen((open) => !open)}
+                                  aria-label={fineTuneOpen ? "Hide fine-tuning controls" : "Fine tune this filter"}
+                                  aria-expanded={fineTuneOpen}
+                                  aria-controls={`filter-adjustments-${filter}`}
+                                  title={fineTuneOpen ? "Hide fine-tuning controls" : "Fine tune this filter"}
+                                  className={`rounded-md p-1.5 transition-colors ${
+                                    fineTuneOpen
+                                      ? "bg-teal-50 text-teal-700 hover:bg-teal-100"
+                                      : "text-slate-500 hover:bg-slate-100 hover:text-teal-700"
+                                  }`}
+                                >
+                                  <Sliders className="h-4 w-4" />
+                                </button>
+                              )}
+                              {docs.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={handleApplyFilterToAll}
+                                  disabled={saving || !hasFilterChanges}
+                                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-semibold text-teal-700 transition-colors hover:bg-teal-50 disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent"
+                                >
+                                  <CheckCheck className="h-4 w-4" />
+                                  {applyingToAll ? "Applying…" : "Apply to all images"}
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
