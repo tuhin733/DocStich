@@ -13,10 +13,12 @@ interface Window {
     checkUpdates(): Promise<{
       tag: string;
       publishedAt: string;
-      downloadUrl: string;
     }>;
-    openDownload(url: string): Promise<void>;
+    downloadUpdate(tag: string): Promise<{ installing: boolean }>;
     openRepository(): Promise<void>;
+    onUpdateProgress(callback: (percent: number) => void): () => void;
+    onUpdateInstalling(callback: () => void): () => void;
+    onUpdateError(callback: (message: string) => void): () => void;
     onMaximizeChange(callback: (isMaximized: boolean) => void): () => void;
   };
 }

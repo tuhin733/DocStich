@@ -1,10 +1,31 @@
 const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 const devServerUrl = "http://127.0.0.1:5173";
 let mainWindow;
+
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
+
+function sendUpdateProgress(percent) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("app:update-progress", percent);
+  }
+}
+
+autoUpdater.on("download-progress", (progress) => {
+  sendUpdateProgress(progress.percent);
+});
+
+autoUpdater.on("error", (error) => {
+  console.error("Unable to download or install update", error);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("app:update-error", error.message);
+  }
+});
 
 function isTrustedSender(event) {
   if (!mainWindow || event.sender !== mainWindow.webContents) return false;
@@ -72,27 +93,11 @@ ipcMain.handle("app:check-updates", async (event) => {
   }
 
   const release = await response.json();
-  const releasePageUrl = release.html_url;
-  const installerUrl = Array.isArray(release.assets)
-    ? release.assets.find(
-        (asset) =>
-          typeof asset.name === "string" &&
-          /\.exe$/i.test(asset.name) &&
-          typeof asset.browser_download_url === "string" &&
-          asset.browser_download_url.startsWith(
-            "https://github.com/tuhin733/DocStich/releases/download/",
-          ),
-      )?.browser_download_url
-    : undefined;
   if (
     typeof release.tag_name !== "string" ||
     !/^v?\d+\.\d+\.\d+$/.test(release.tag_name) ||
     typeof release.published_at !== "string" ||
-    Number.isNaN(Date.parse(release.published_at)) ||
-    typeof releasePageUrl !== "string" ||
-    !releasePageUrl.startsWith(
-      "https://github.com/tuhin733/DocStich/releases/tag/",
-    )
+    Number.isNaN(Date.parse(release.published_at))
   ) {
     throw new Error("The latest GitHub release has invalid metadata");
   }
@@ -100,21 +105,33 @@ ipcMain.handle("app:check-updates", async (event) => {
   return {
     tag: release.tag_name,
     publishedAt: release.published_at,
-    downloadUrl: installerUrl || releasePageUrl,
   };
 });
 
-ipcMain.handle("app:open-download", (event, downloadUrl) => {
+ipcMain.handle("app:download-update", async (event, tag) => {
   if (!isTrustedSender(event)) throw new Error("Untrusted update download request");
-  if (
-    typeof downloadUrl !== "string" ||
-    !/^https:\/\/github\.com\/tuhin733\/DocStich\/releases\/(?:download|tag)\//.test(
-      downloadUrl,
-    )
-  ) {
-    throw new TypeError("Invalid update download URL");
+  if (!app.isPackaged) {
+    throw new Error("In-app updates are only available in an installed build");
   }
-  return shell.openExternal(downloadUrl);
+  if (typeof tag !== "string" || !/^v?\d+\.\d+\.\d+$/.test(tag)) {
+    throw new TypeError("Invalid update version");
+  }
+
+  const result = await autoUpdater.checkForUpdates();
+  if (
+    !result ||
+    result.updateInfo.version !== tag.replace(/^v/, "")
+  ) {
+    throw new Error("The available release changed. Restart the app to check again.");
+  }
+
+  sendUpdateProgress(0);
+  await autoUpdater.downloadUpdate();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("app:update-installing");
+  }
+  setTimeout(() => autoUpdater.quitAndInstall(false, true), 0);
+  return { installing: true };
 });
 
 ipcMain.handle("app:open-repository", (event) => {

@@ -65,8 +65,8 @@ export interface LayoutSettings {
 
 export type UpdateStatus =
   | { state: "checking" }
-  | { state: "available"; tag: string; publishedAt: string; downloadUrl: string }
-  | { state: "current"; tag: string; publishedAt: string; downloadUrl: string }
+  | { state: "available"; tag: string; publishedAt: string }
+  | { state: "current"; tag: string; publishedAt: string }
   | { state: "error" };
 
 /** A4 portrait in mm */

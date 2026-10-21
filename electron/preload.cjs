@@ -8,8 +8,23 @@ contextBridge.exposeInMainWorld("desktopAPI", {
   toggleMaximize: () => ipcRenderer.invoke("window:toggle-maximize"),
   close: () => ipcRenderer.invoke("window:close"),
   checkUpdates: () => ipcRenderer.invoke("app:check-updates"),
-  openDownload: (url) => ipcRenderer.invoke("app:open-download", url),
+  downloadUpdate: (tag) => ipcRenderer.invoke("app:download-update", tag),
   openRepository: () => ipcRenderer.invoke("app:open-repository"),
+  onUpdateProgress: (callback) => {
+    const listener = (_event, percent) => callback(percent);
+    ipcRenderer.on("app:update-progress", listener);
+    return () => ipcRenderer.removeListener("app:update-progress", listener);
+  },
+  onUpdateInstalling: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("app:update-installing", listener);
+    return () => ipcRenderer.removeListener("app:update-installing", listener);
+  },
+  onUpdateError: (callback) => {
+    const listener = (_event, message) => callback(message);
+    ipcRenderer.on("app:update-error", listener);
+    return () => ipcRenderer.removeListener("app:update-error", listener);
+  },
   onMaximizeChange: (callback) => {
     const listener = (_event, isMaximized) => callback(isMaximized);
     ipcRenderer.on("window:maximize-state", listener);

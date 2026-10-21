@@ -4,7 +4,6 @@ import {
   Github,
   Heart,
   Info,
-  Download,
   Minus,
   Square,
   Copy,
@@ -21,6 +20,7 @@ import ImageEditor from "./components/ImageEditor";
 import PdfExportDialog from "./components/PdfExportDialog";
 import AboutDialog from "./components/AboutDialog";
 import DonationDialog from "./components/DonationDialog";
+import UpdateDialog from "./components/UpdateDialog";
 import type { UpdateStatus } from "./types";
 
 function App() {
@@ -67,6 +67,12 @@ function App() {
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showDonationDialog, setShowDonationDialog] = useState(false);
+  const [isUpdateDialogDismissed, setIsUpdateDialogDismissed] = useState(false);
+  const [updateDownloadState, setUpdateDownloadState] = useState<
+    "idle" | "downloading" | "installing" | "error"
+  >("idle");
+  const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateError, setUpdateError] = useState("");
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
     state: "checking",
   });
@@ -101,7 +107,6 @@ function App() {
         state: hasNewerVersion ? "available" : "current",
         tag: latestRelease.tag,
         publishedAt: latestRelease.publishedAt,
-        downloadUrl: latestRelease.downloadUrl,
       });
     } catch (error) {
       console.error("Unable to check for updates", error);
@@ -112,6 +117,27 @@ function App() {
   useEffect(() => {
     if (desktopAPI) void checkForUpdates();
   }, [checkForUpdates, desktopAPI]);
+
+  useEffect(() => {
+    if (!desktopAPI) return;
+
+    const unsubscribeProgress = desktopAPI.onUpdateProgress((percent) => {
+      setUpdateProgress(Math.max(0, Math.min(100, percent)));
+    });
+    const unsubscribeInstalling = desktopAPI.onUpdateInstalling(() => {
+      setUpdateDownloadState("installing");
+    });
+    const unsubscribeError = desktopAPI.onUpdateError((message) => {
+      setUpdateDownloadState("error");
+      setUpdateError(message);
+    });
+
+    return () => {
+      unsubscribeProgress();
+      unsubscribeInstalling();
+      unsubscribeError();
+    };
+  }, [desktopAPI]);
 
   useEffect(() => {
     if (!desktopAPI) return;
@@ -201,36 +227,6 @@ function App() {
               Doc<span className="text-teal-600">Stitch</span>
             </h1>
           </div>
-          {updateStatus.state === "available" && (
-            <div className="flex min-w-0 flex-1 justify-center px-2">
-              <div
-                className="flex min-w-0 items-center gap-2 px-2.5 py-1 text-[11px] text-teal-900"
-                role="status"
-                aria-live="polite"
-              >
-                <span className="truncate text-[11px] text-slate-600">
-                  DocStitch {updateStatus.tag} is available.
-                </span>
-                <a
-                  href={updateStatus.downloadUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex shrink-0 items-center gap-1 rounded bg-teal-700 px-2 py-1 font-semibold text-white transition-colors hover:bg-teal-800"
-                  onClick={(event) => {
-                    if (!desktopAPI) return;
-                    event.preventDefault();
-                    void desktopAPI.openDownload(updateStatus.downloadUrl).catch(
-                      (error: unknown) =>
-                        console.error("Unable to open update download", error),
-                    );
-                  }}
-                >
-                  <Download className="h-3 w-3" aria-hidden="true" />
-                  Download
-                </a>
-              </div>
-            </div>
-          )}
           <div className="flex h-full items-center">
             <button
               type="button"
@@ -475,6 +471,49 @@ function App() {
 
       {showDonationDialog && (
         <DonationDialog onClose={() => setShowDonationDialog(false)} />
+      )}
+
+      {updateStatus.state === "available" && !isUpdateDialogDismissed && (
+        <UpdateDialog
+          version={updateStatus.tag}
+          downloadState={updateDownloadState}
+          progress={updateProgress}
+          error={updateError}
+          onUpdate={() => {
+            if (
+              updateStatus.state !== "available" ||
+              updateDownloadState === "downloading" ||
+              updateDownloadState === "installing"
+            ) {
+              return;
+            }
+            if (!desktopAPI) {
+              setUpdateDownloadState("error");
+              setUpdateError(
+                "In-app updates are only available in the installed desktop app.",
+              );
+              return;
+            }
+            setUpdateDownloadState("downloading");
+            setUpdateProgress(0);
+            setUpdateError("");
+            void desktopAPI
+              .downloadUpdate(updateStatus.tag)
+              .then(() => setUpdateDownloadState("installing"))
+              .catch((error: unknown) =>
+                {
+                  console.error("Unable to install update", error);
+                  setUpdateDownloadState("error");
+                  setUpdateError(
+                    error instanceof Error
+                      ? error.message
+                      : "The update could not be downloaded.",
+                  );
+                },
+              );
+          }}
+          onLater={() => setIsUpdateDialogDismissed(true)}
+        />
       )}
     </>
   );
