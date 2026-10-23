@@ -7,6 +7,7 @@ Built to solve everyday problems faced by shopkeepers, DocStich makes preparing 
 ## Features
 
 - Add multiple image files by browsing or dragging and dropping them.
+- Scan documents from WIA-compatible scanners and printers using the Windows scan dialog; DocStitch detects, crops, and perspective-corrects the document automatically when it can identify its edges.
 - Choose a document type, including Aadhar, Voter ID, PAN, passport, driving licence, ration card, or a custom size.
 - Preview and arrange images on A4 pages, with controls for card width, spacing, and items per page.
 - Add blank A4 pages to the project and include them in exported PDFs.
@@ -14,6 +15,10 @@ Built to solve everyday problems faced by shopkeepers, DocStich makes preparing 
 - Export PDFs with lossless, standard, balanced, or custom target-size compression.
 - Automatically save the current project in browser storage and restore it on the next launch.
 - Show the installed app version and check GitHub Releases for the latest published update.
+
+### Scanner troubleshooting
+
+Scanning requires Windows to detect a WIA-compatible scanner. If DocStitch cannot connect, make sure the printer is turned on and connected, install its WIA-compatible driver, and confirm it can scan in Windows Scan or Windows Fax and Scan before trying again. For automatic document detection, place the document against a scanner bed that contrasts with its edges. If detection is uncertain, DocStitch asks you to rescan instead of importing the full scanner page.
 
 ## Requirements
 

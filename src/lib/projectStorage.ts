@@ -1,4 +1,5 @@
 import { DEFAULT_LAYOUT } from "../constants";
+import { notifyUserError } from "./userErrors";
 import type { LayoutSettings, UploadedDoc } from "../types";
 
 const STORAGE_KEY = "docstitch-project-v1";
@@ -104,6 +105,9 @@ export const loadProject = async (): Promise<{
     };
   } catch (error) {
     console.error("Unable to restore saved project state:", error);
+    notifyUserError(
+      "The saved project couldn't be restored. You can continue with a new project.",
+    );
     return null;
   }
 };

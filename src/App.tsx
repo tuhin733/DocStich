@@ -11,8 +11,11 @@ import {
 } from "lucide-react";
 import { DOC_CATEGORIES } from "./constants";
 import { paginate } from "./lib/pagination";
+import { processScannedDocument } from "./lib/scanImage";
+import { notifyUserError } from "./lib/userErrors";
 import { useProjectState } from "./hooks/useProjectState";
 import UploadZone from "./components/UploadZone";
+import ErrorPopup from "./components/ErrorPopup";
 import DocTray from "./components/DocTray";
 import A4Page from "./components/A4Page";
 import ControlPanel from "./components/ControlPanel";
@@ -32,14 +35,11 @@ function App() {
     arrangeMode,
     defaultCategory,
     editingDocId,
-    importError,
-    actionError,
     showPdfExportDialog,
     showExportToast,
     setArrangeMode,
     setDefaultCategory,
     setEditingDocId,
-    setImportError,
     addFiles,
     addPage,
     addPageAfter,
@@ -72,11 +72,55 @@ function App() {
     "idle" | "downloading" | "installing" | "error"
   >("idle");
   const [updateProgress, setUpdateProgress] = useState(0);
-  const [updateError, setUpdateError] = useState("");
+  const [isScanning, setIsScanning] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
     state: "checking",
   });
   const desktopAPI = window.desktopAPI;
+
+  const handleScan = useCallback(async () => {
+    if (!desktopAPI) return;
+
+    setIsScanning(true);
+    try {
+      const result = await desktopAPI.scanDocument();
+      if (!result.canceled) {
+        const scannedFile = new File([result.bytes], result.fileName, {
+          type: "image/jpeg",
+        });
+        await addFiles(
+          [await processScannedDocument(scannedFile)],
+          activePageIndex,
+        );
+      }
+    } catch (error) {
+      console.error("Unable to scan document", error);
+      const details = error instanceof Error ? error.message : "";
+      if (/could not confidently detect a document/i.test(details)) {
+        notifyUserError(
+          "Couldn't detect the document. Place it on a contrasting scanner bed and try again.",
+        );
+      } else if (/did not respond within 3 minutes/i.test(details)) {
+        notifyUserError(
+          "The printer didn't respond. Make sure it's on and connected, then try again.",
+        );
+      } else if (
+        /wia device|scanner.*(not found|unavailable|not ready)|device.*(not found|unavailable|not ready)/i.test(
+          details,
+        )
+      ) {
+        notifyUserError(
+          "Couldn't connect to the printer. Make sure it's turned on and connected, then try again.",
+        );
+      } else {
+        notifyUserError(
+          "The scan couldn't be completed. Check that the printer is on and connected, then try again.",
+        );
+      }
+    } finally {
+      setIsScanning(false);
+    }
+  }, [activePageIndex, addFiles, desktopAPI]);
 
   const checkForUpdates = useCallback(async () => {
     if (!desktopAPI) {
@@ -127,9 +171,11 @@ function App() {
     const unsubscribeInstalling = desktopAPI.onUpdateInstalling(() => {
       setUpdateDownloadState("installing");
     });
-    const unsubscribeError = desktopAPI.onUpdateError((message) => {
+    const unsubscribeError = desktopAPI.onUpdateError(() => {
       setUpdateDownloadState("error");
-      setUpdateError(message);
+      notifyUserError(
+        "Couldn't install the update. Check your internet connection and try again.",
+      );
     });
 
     return () => {
@@ -214,6 +260,7 @@ function App() {
 
   return (
     <>
+      <ErrorPopup />
       <div className="screen-shell flex h-dvh flex-col overflow-hidden bg-slate-50">
         <header className="app-titlebar sticky top-0 z-30 flex h-10 shrink-0 items-center justify-between border-b border-slate-200 bg-white/90 pl-3 backdrop-blur-lg">
           <div className="flex items-center gap-2">
@@ -251,9 +298,12 @@ function App() {
                 event.preventDefault();
                 void desktopAPI
                   .openRepository()
-                  .catch((error: unknown) =>
-                    console.error("Unable to open project repository", error),
-                  );
+                  .catch((error: unknown) => {
+                    console.error("Unable to open project repository", error);
+                    notifyUserError(
+                      "Couldn't open the DocStitch website. Check your internet connection and try again.",
+                    );
+                  });
               }}
             >
               <Github
@@ -331,19 +381,10 @@ function App() {
 
                 <UploadZone
                   onFiles={(files) => addFiles(files, activePageIndex)}
+                  onScan={desktopAPI ? () => void handleScan() : undefined}
+                  isScanning={isScanning}
                   documentMode={defaultCategory === "document"}
-                  error={importError}
-                  onError={setImportError}
                 />
-
-                {actionError && (
-                  <p
-                    className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700"
-                    role="alert"
-                  >
-                    {actionError}
-                  </p>
-                )}
 
                 <div className="flex min-h-0 flex-1 flex-col">
                   <div className="mb-2 flex items-center justify-between">
@@ -413,6 +454,16 @@ function App() {
           </div>
         </main>
         <footer className="relative z-10 flex h-9 shrink-0 items-center justify-between border-t border-slate-200 bg-white px-3 text-[11px] text-slate-500 shadow-[0_-2px_8px_rgba(15,23,42,0.04)]">
+          {isScanning && (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 h-0.5 overflow-hidden bg-emerald-100"
+              role="progressbar"
+              aria-label="Scanning document"
+              aria-valuetext="Scan in progress"
+            >
+              <div className="scan-progress-indicator h-full w-1/3 bg-emerald-500" />
+            </div>
+          )}
           <span className="font-semibold">Version {__APP_VERSION__}</span>
           <button
             type="button"
@@ -478,7 +529,6 @@ function App() {
           version={updateStatus.tag}
           downloadState={updateDownloadState}
           progress={updateProgress}
-          error={updateError}
           onUpdate={() => {
             if (
               updateStatus.state !== "available" ||
@@ -489,28 +539,23 @@ function App() {
             }
             if (!desktopAPI) {
               setUpdateDownloadState("error");
-              setUpdateError(
+              notifyUserError(
                 "In-app updates are only available in the installed desktop app.",
               );
               return;
             }
             setUpdateDownloadState("downloading");
             setUpdateProgress(0);
-            setUpdateError("");
             void desktopAPI
               .downloadUpdate(updateStatus.tag)
               .then(() => setUpdateDownloadState("installing"))
-              .catch((error: unknown) =>
-                {
-                  console.error("Unable to install update", error);
-                  setUpdateDownloadState("error");
-                  setUpdateError(
-                    error instanceof Error
-                      ? error.message
-                      : "The update could not be downloaded.",
-                  );
-                },
-              );
+              .catch((error: unknown) => {
+                console.error("Unable to install update", error);
+                setUpdateDownloadState("error");
+                notifyUserError(
+                  "Couldn't install the update. Check your internet connection and try again.",
+                );
+              });
           }}
           onLater={() => setIsUpdateDialogDismissed(true)}
         />

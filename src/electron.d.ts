@@ -6,6 +6,10 @@ interface Window {
       bytes: Uint8Array,
       filename: string,
     ): Promise<{ canceled: boolean }>;
+    scanDocument(): Promise<
+      | { canceled: true }
+      | { canceled: false; bytes: Uint8Array; fileName: string }
+    >;
     isMaximized(): Promise<boolean>;
     minimize(): Promise<void>;
     toggleMaximize(): Promise<void>;

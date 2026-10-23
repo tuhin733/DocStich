@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("desktopAPI", {
   savePdf: (bytes, filename) =>
     ipcRenderer.invoke("dialog:save-pdf", bytes, filename),
+  scanDocument: () => ipcRenderer.invoke("scanner:scan-document"),
   isMaximized: () => ipcRenderer.invoke("window:is-maximized"),
   minimize: () => ipcRenderer.invoke("window:minimize"),
   toggleMaximize: () => ipcRenderer.invoke("window:toggle-maximize"),

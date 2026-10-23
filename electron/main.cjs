@@ -1,11 +1,15 @@
 const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
+const { execFile } = require("node:child_process");
 const fs = require("node:fs/promises");
+const os = require("node:os");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const { promisify } = require("node:util");
 
 const devServerUrl = "http://127.0.0.1:5173";
 let mainWindow;
+const execFileAsync = promisify(execFile);
 
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = false;
@@ -23,7 +27,10 @@ autoUpdater.on("download-progress", (progress) => {
 autoUpdater.on("error", (error) => {
   console.error("Unable to download or install update", error);
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("app:update-error", error.message);
+    mainWindow.webContents.send(
+      "app:update-error",
+      "The update could not be installed.",
+    );
   }
 });
 
@@ -52,6 +59,66 @@ ipcMain.handle("dialog:save-pdf", async (event, bytes, filename) => {
 
   await fs.writeFile(filePath, Buffer.from(bytes));
   return { canceled: false };
+});
+
+ipcMain.handle("scanner:scan-document", async (event) => {
+  if (!isTrustedSender(event)) throw new Error("Untrusted scanner request");
+
+  const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "docstitch-scan-"));
+  const outputPath = path.join(tempDirectory, "scan.jpg");
+  const scriptPath = path.join(__dirname, "scan-document.ps1");
+
+  try {
+    try {
+      await execFileAsync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-STA",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          scriptPath,
+          outputPath,
+        ],
+        {
+          windowsHide: false,
+          timeout: 180_000,
+          encoding: "utf8",
+        },
+      );
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === 2) {
+        return { canceled: true };
+      }
+      if (error && typeof error === "object" && "killed" in error && error.killed) {
+        throw new Error(
+          "The scanner did not respond within 3 minutes. Check that it is powered on and connected, close any other scanning apps, then try again.",
+        );
+      }
+      const details =
+        error && typeof error === "object"
+          ? `${"message" in error ? error.message : ""}\n${"stderr" in error ? error.stderr : ""}`
+          : "";
+      if (/No WIA device of the selected type is available/i.test(details)) {
+        throw new Error(
+          "Windows could not find a WIA-compatible scanner. Connect and power on the scanner, install its WIA driver, and confirm it can scan in Windows Scan or Windows Fax and Scan.",
+        );
+      }
+      throw error;
+    }
+
+    const image = await fs.readFile(outputPath);
+    if (image.length === 0) throw new Error("The scanner returned an empty image");
+
+    return {
+      canceled: false,
+      bytes: new Uint8Array(image),
+      fileName: `scan-${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`,
+    };
+  } finally {
+    await fs.rm(tempDirectory, { recursive: true, force: true });
+  }
 });
 
 ipcMain.handle("window:is-maximized", (event) => {

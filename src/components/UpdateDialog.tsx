@@ -4,7 +4,6 @@ interface Props {
   version: string;
   downloadState: "idle" | "downloading" | "installing" | "error";
   progress: number;
-  error: string;
   onUpdate: () => void;
   onLater: () => void;
 }
@@ -13,7 +12,6 @@ export default function UpdateDialog({
   version,
   downloadState,
   progress,
-  error,
   onUpdate,
   onLater,
 }: Props) {
@@ -64,11 +62,6 @@ export default function UpdateDialog({
         {downloadState === "installing" && (
           <p className="mt-4 text-sm text-teal-700" role="status">
             Installing update and restarting DocStitch...
-          </p>
-        )}
-        {downloadState === "error" && (
-          <p className="mt-4 text-sm text-red-600" role="alert">
-            {error}
           </p>
         )}
         <div className="mt-6 flex justify-center gap-3">

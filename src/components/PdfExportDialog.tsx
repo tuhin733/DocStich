@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { FileDown, Loader2, X } from "lucide-react";
 import type { LayoutSettings, UploadedDoc } from "../types";
 import { generatePDF, PDF_COMPRESSION_OPTIONS, type PdfCompression } from "../lib/pdf";
+import { notifyUserError } from "../lib/userErrors";
 
 interface Props {
   docs: UploadedDoc[];
@@ -65,7 +66,6 @@ export default function PdfExportDialog({
   const [estimatedPdf, setEstimatedPdf] = useState<Blob | null>(null);
   const [estimating, setEstimating] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [estimateError, setEstimateError] = useState("");
   const sourceSize = docs.reduce((total, doc) => total + doc.file.size, 0);
   const targetBytes =
     Number(targetSize) * (targetUnit === "MB" ? 1024 * 1024 : 1024);
@@ -84,7 +84,6 @@ export default function PdfExportDialog({
   useEffect(() => {
     let active = true;
     setEstimatedPdf(null);
-    setEstimateError("");
     if (compression === "uncompressed" || !validTarget) {
       setEstimating(false);
       return () => {
@@ -105,9 +104,10 @@ export default function PdfExportDialog({
           if (active) setEstimatedPdf(pdf);
         })
         .catch((error: unknown) => {
+          console.error("Could not estimate PDF size", error);
           if (active) {
-            setEstimateError(
-              error instanceof Error ? error.message : "Could not estimate PDF size.",
+            notifyUserError(
+              "Couldn't prepare the PDF estimate. Check the images and try again.",
             );
           }
         })
@@ -134,7 +134,6 @@ export default function PdfExportDialog({
     }
 
     setExporting(true);
-    setEstimateError("");
     try {
       const pdf = await generatePDF(
         docs,
@@ -145,9 +144,8 @@ export default function PdfExportDialog({
       );
       onExport(pdf);
     } catch (error: unknown) {
-      setEstimateError(
-        error instanceof Error ? error.message : "Could not generate the PDF.",
-      );
+      console.error("Could not generate PDF", error);
+      notifyUserError("Couldn't create the PDF. Check the images and try again.");
     } finally {
       setExporting(false);
     }
@@ -295,17 +293,14 @@ export default function PdfExportDialog({
           </label>
         </fieldset>
 
-        {(compression === "custom" && validTarget && estimatedPdf && estimatedPdf.size > targetBytes) ||
-        estimateError ? (
+        {compression === "custom" &&
+        validTarget &&
+        estimatedPdf &&
+        estimatedPdf.size > targetBytes ? (
           <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs">
-          {compression === "custom" && validTarget && estimatedPdf && estimatedPdf.size > targetBytes && (
             <p className="text-amber-700" role="status">
               This target is too small to reach with the available compression. The estimate is above your target.
             </p>
-          )}
-          {estimateError && (
-            <p className="text-red-700" role="alert">{estimateError}</p>
-          )}
           </div>
         ) : null}
 

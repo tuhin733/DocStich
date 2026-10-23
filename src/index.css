@@ -71,3 +71,24 @@
 .scrollbar-hidden::-webkit-scrollbar {
   display: none;
 }
+
+.scan-progress-indicator {
+  animation: scan-progress 1.5s ease-in-out infinite;
+}
+
+@keyframes scan-progress {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-progress-indicator {
+    animation: none;
+    width: 100%;
+  }
+}

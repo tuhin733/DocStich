@@ -4,6 +4,7 @@ import { DEFAULT_LAYOUT, DOC_CATEGORIES } from "../constants";
 import { paginate } from "../lib/pagination";
 import { savePDF } from "../lib/pdf";
 import { clearProject, loadProject, serializeProject } from "../lib/projectStorage";
+import { notifyUserError } from "../lib/userErrors";
 import type { DocCategoryId, LayoutSettings, UploadedDoc } from "../types";
 
 let idCounter = 0;
@@ -18,11 +19,10 @@ export function useProjectState() {
   const [defaultCategory, setDefaultCategory] =
     useState<DocCategoryId>("aadhar");
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
-  const [importError, setImportError] = useState("");
-  const [actionError, setActionError] = useState("");
   const [showPdfExportDialog, setShowPdfExportDialog] = useState(false);
   const [showExportToast, setShowExportToast] = useState(false);
   const hasHydratedProjectRef = useRef(false);
+  const storageFailureNotifiedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -51,7 +51,19 @@ export function useProjectState() {
 
   useEffect(() => {
     if (!hasHydratedProjectRef.current) return;
-    void serializeProject(docs, settings, blankPageCount);
+    void serializeProject(docs, settings, blankPageCount)
+      .then(() => {
+        storageFailureNotifiedRef.current = false;
+      })
+      .catch((error: unknown) => {
+        console.error("Unable to save project state", error);
+        if (!storageFailureNotifiedRef.current) {
+          storageFailureNotifiedRef.current = true;
+          notifyUserError(
+            "Changes couldn't be saved automatically. Free up storage space and try again.",
+          );
+        }
+      });
   }, [blankPageCount, docs, settings]);
 
   useEffect(() => {
@@ -62,7 +74,6 @@ export function useProjectState() {
 
   const addFiles = useCallback(
     async (files: File[], targetPageIndex?: number) => {
-      setImportError("");
       const results = await Promise.allSettled(
         files.map(
           (file) =>
@@ -186,7 +197,7 @@ export function useProjectState() {
       );
 
       if (failedFiles.length) {
-        setImportError(
+        notifyUserError(
           `Could not open ${failedFiles.length === 1 ? "image" : "images"}: ${failedFiles.join(", ")}.`,
         );
       }
@@ -434,7 +445,6 @@ export function useProjectState() {
 
   const handleExport = useCallback(() => {
     if (docs.length === 0 && blankPageCount === 0) return;
-    setActionError("");
     setShowExportToast(false);
     setShowPdfExportDialog(true);
   }, [blankPageCount, docs.length]);
@@ -451,9 +461,9 @@ export function useProjectState() {
         const saved = await savePDF(pdf, `${documentType}-${ts}.pdf`);
         if (saved) setShowExportToast(true);
       } catch (error) {
-        console.error(error);
-        setActionError(
-          `Failed to save PDF: ${error instanceof Error ? error.message : String(error)}`,
+        console.error("Unable to save PDF", error);
+        notifyUserError(
+          "Couldn't save the PDF. Choose a writable location and try again.",
         );
       } finally {
         setBusy(false);
@@ -474,15 +484,11 @@ export function useProjectState() {
     arrangeMode,
     defaultCategory,
     editingDocId,
-    importError,
-    actionError,
     showPdfExportDialog,
     showExportToast,
     setArrangeMode,
     setDefaultCategory,
     setEditingDocId,
-    setImportError,
-    setActionError,
     setShowPdfExportDialog,
     setShowExportToast,
     setBusy,

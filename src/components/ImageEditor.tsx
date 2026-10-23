@@ -19,6 +19,7 @@ import {
   Scan,
 } from "lucide-react";
 import type { UploadedDoc } from "../types";
+import { notifyUserError } from "../lib/userErrors";
 
 export type FilterId =
   | "none"
@@ -519,11 +520,10 @@ export default function ImageEditor({
   const [savedPresets, setSavedPresets] = useState<SavedAdjustmentPreset[]>([]);
   const [savedPresetName, setSavedPresetName] = useState("");
   const [savedPresetsLoaded, setSavedPresetsLoaded] = useState(false);
-  const [presetError, setPresetError] = useState("");
   const [rotation, setRotation] = useState(0);
   const [flipH, setFlipH] = useState(false);
   const [flipV, setFlipV] = useState(false);
-  const [saveError, setSaveError] = useState("");
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [applyingToAll, setApplyingToAll] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -555,7 +555,7 @@ export default function ImageEditor({
       }
     } catch (error) {
       console.error("Failed to load saved image adjustment presets:", error);
-      setPresetError("Saved presets could not be loaded.");
+      notifyUserError("Saved image presets couldn't be loaded.");
     } finally {
       setSavedPresetsLoaded(true);
     }
@@ -640,10 +640,14 @@ export default function ImageEditor({
       setLoaded(true);
     };
     img.onerror = () => {
-      if (active) setSaveError("This image could not be opened.");
+      if (active) {
+        setImageLoadFailed(true);
+        notifyUserError("This image couldn't be opened.");
+      }
     };
     setLoaded(false);
-    setSaveError("");
+    setImageLoadFailed(false);
+    imgRef.current = null;
     img.src = doc.url;
     return () => {
       active = false;
@@ -763,14 +767,12 @@ export default function ImageEditor({
     setCropMode(false);
     setQuad(null);
     setCropPreset("Free");
-    setSaveError("");
   };
 
   const handleSave = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     setSaving(true);
-    setSaveError("");
 
     try {
       const exportCanvas = document.createElement("canvas");
@@ -823,10 +825,12 @@ export default function ImageEditor({
       setZoom(1);
     } catch (error) {
       console.error("Failed to save edited image:", error);
-      setSaveError(
-        error instanceof Error
-          ? error.message
-          : "Could not export this image. Please try again.",
+      const details = error instanceof Error ? error.message : "";
+      notifyUserError(
+        details === "Move the crop corners so they form a convex shape." ||
+          details === "The selected crop area is too small."
+          ? details
+          : "Couldn't save the edited image. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -839,7 +843,6 @@ export default function ImageEditor({
 
     setSaving(true);
     setApplyingToAll(true);
-    setSaveError("");
     const results: { id: string; result: EditResult }[] = [];
 
     try {
@@ -897,11 +900,7 @@ export default function ImageEditor({
     } catch (error) {
       for (const { result } of results) URL.revokeObjectURL(result.url);
       console.error("Failed to apply filter to all images:", error);
-      setSaveError(
-        error instanceof Error
-          ? error.message
-          : "Could not apply this filter to all images. Please try again.",
-      );
+      notifyUserError("Couldn't apply the filter to all images. Please try again.");
     } finally {
       setSaving(false);
       setApplyingToAll(false);
@@ -912,11 +911,10 @@ export default function ImageEditor({
     try {
       localStorage.setItem(SAVED_PRESETS_KEY, JSON.stringify(nextPresets));
       setSavedPresets(nextPresets);
-      setPresetError("");
       return true;
     } catch (error) {
       console.error("Failed to save image adjustment presets:", error);
-      setPresetError("Saved presets could not be updated in browser storage.");
+      notifyUserError("Saved presets couldn't be updated. Check available storage.");
       return false;
     }
   };
@@ -1343,13 +1341,13 @@ export default function ImageEditor({
                   : "items-center justify-center"
               }`}
             >
-            {!loaded && !saveError ? (
+            {!loaded && !imageLoadFailed ? (
               <div className="flex items-center gap-2 text-slate-400">
                 <RefreshCw className="h-5 w-5 animate-spin" />
                 <span className="text-sm">Loading image…</span>
               </div>
             ) : !loaded ? (
-              <p className="text-sm font-medium text-red-600">{saveError}</p>
+              <div className="h-full w-full" aria-hidden="true" />
             ) : (
               <div
                 className="relative mx-auto inline-block shrink-0"
@@ -1711,11 +1709,6 @@ export default function ImageEditor({
                                     ))}
                                   </div>
                                 )}
-                                {presetError && (
-                                  <p className="mt-2 text-[10px] text-red-600" role="alert">
-                                    {presetError}
-                                  </p>
-                                )}
                               </div>
                             )}
                           </div>
@@ -1790,11 +1783,8 @@ export default function ImageEditor({
 
         {/* Footer actions */}
         <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-3">
-          <p
-            className={`min-w-0 text-[11px] ${saveError ? "text-red-600" : "text-slate-400"}`}
-            role={saveError ? "alert" : undefined}
-          >
-            {saveError || `Edits replace the current image · ${canvasRef.current?.width ?? doc.pxW} × ${canvasRef.current?.height ?? doc.pxH}px`}
+          <p className="min-w-0 text-[11px] text-slate-400">
+            {`Edits replace the current image · ${canvasRef.current?.width ?? doc.pxW} × ${canvasRef.current?.height ?? doc.pxH}px`}
           </p>
           <div className="flex items-center gap-2">
             <button
