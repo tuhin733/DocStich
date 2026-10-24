@@ -210,7 +210,7 @@ function applyPaperWhitening(ctx: CanvasRenderingContext2D, w: number, h: number
     const gray = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
     const amount = Math.max(0, Math.min(1, (gray - 170) / 75));
     const smoothAmount = amount * amount * (3 - 2 * amount);
-    const whitened = gray + (255 - gray) * 0.82 * smoothAmount;
+    const whitened = gray + (255 - gray) * 0.9 * smoothAmount;
     pixels[i] = whitened;
     pixels[i + 1] = whitened;
     pixels[i + 2] = whitened;
@@ -222,7 +222,7 @@ function applyPhotocopyEnhancement(ctx: CanvasRenderingContext2D, w: number, h: 
   applyShadowRemoval(ctx, w, h);
   applyGrayscale(ctx, w, h);
   applyAutoContrast(ctx, w, h);
-  applySharpen(ctx, w, h, 0.2);
+  applySharpen(ctx, w, h, 0.24);
   applyPaperWhitening(ctx, w, h);
 }
 
@@ -1573,9 +1573,7 @@ export default function ImageEditor({
                         </button>
                       ))}
                     </div>
-                    <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-                      Drag the corners to frame the page. The crop is perspective-corrected when applied.
-                    </p>
+                    
                   </>
                 )}
               </Section>
