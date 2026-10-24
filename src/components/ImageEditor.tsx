@@ -23,16 +23,9 @@ import { notifyUserError } from "../lib/userErrors";
 
 export type FilterId =
   | "none"
-  | "vivid-light"
-  | "contrast-bw"
-  | "vibrant"
-  | "solt-tone"
-  | "sharp-black"
-  | "bw"
-  | "carbon-black"
-  | "ocv-black"
-  | "gray"
-  | "color-pop";
+  | "auto-enhance"
+  | "grayscale-scan"
+  | "bw-photocopy";
 
 export interface EditResult {
   file: File;
@@ -117,7 +110,64 @@ function applyGrayscale(ctx: CanvasRenderingContext2D, w: number, h: number, con
   applyTone(ctx, w, h, { saturation: 0, contrast, brightness });
 }
 
-function applyThresholdBlackAndWhite(ctx: CanvasRenderingContext2D, w: number, h: number) {
+function applyDenoise(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const source = imageData.data;
+  const output = new Uint8ClampedArray(source);
+  const offsets = [-w * 4 - 4, -w * 4, -w * 4 + 4, -4, 4, w * 4 - 4, w * 4, w * 4 + 4];
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const index = (y * w + x) * 4;
+      let minLuminance = 255;
+      let maxLuminance = 0;
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      for (const offset of offsets) {
+        const neighbor = index + offset;
+        const luminance = 0.299 * source[neighbor] +
+          0.587 * source[neighbor + 1] +
+          0.114 * source[neighbor + 2];
+        minLuminance = Math.min(minLuminance, luminance);
+        maxLuminance = Math.max(maxLuminance, luminance);
+        red += source[neighbor] / offsets.length;
+        green += source[neighbor + 1] / offsets.length;
+        blue += source[neighbor + 2] / offsets.length;
+      }
+      const centerLuminance = 0.299 * source[index] +
+        0.587 * source[index + 1] +
+        0.114 * source[index + 2];
+      const averageLuminance = 0.299 * red + 0.587 * green + 0.114 * blue;
+      if (maxLuminance - minLuminance < 40 && Math.abs(centerLuminance - averageLuminance) > 18) {
+        output[index] = source[index] * 0.55 + red * 0.45;
+        output[index + 1] = source[index + 1] * 0.55 + green * 0.45;
+        output[index + 2] = source[index + 2] * 0.55 + blue * 0.45;
+      }
+    }
+  }
+  ctx.putImageData(new ImageData(output, w, h), 0, 0);
+}
+
+function applyShadowRemoval(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  whitenBackground = false,
+) {
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const pixels = imageData.data;
+  const lift = whitenBackground ? 0.32 : 0.18;
+  for (let i = 0; i < pixels.length; i += 4) {
+    for (let channel = 0; channel < 3; channel++) {
+      const value = pixels[i + channel];
+      const normalized = value / 255;
+      pixels[i + channel] = value + (255 - value) * lift * normalized * normalized;
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function applyAutoContrast(ctx: CanvasRenderingContext2D, w: number, h: number) {
   const imageData = ctx.getImageData(0, 0, w, h);
   const pixels = imageData.data;
   const histogram = new Uint32Array(256);
@@ -127,39 +177,56 @@ function applyThresholdBlackAndWhite(ctx: CanvasRenderingContext2D, w: number, h
   }
 
   const total = pixels.length / 4;
-  let sum = 0;
-  for (let value = 0; value < 256; value++) sum += value * histogram[value];
-  let backgroundWeight = 0;
-  let backgroundSum = 0;
-  let threshold = 130;
-  let maxVariance = 0;
-  for (let value = 0; value < 256; value++) {
-    backgroundWeight += histogram[value];
-    if (backgroundWeight === 0) continue;
-    const foregroundWeight = total - backgroundWeight;
-    if (foregroundWeight === 0) break;
-    backgroundSum += value * histogram[value];
-    const meanBackground = backgroundSum / backgroundWeight;
-    const meanForeground = (sum - backgroundSum) / foregroundWeight;
-    const variance = backgroundWeight * foregroundWeight *
-      (meanBackground - meanForeground) ** 2;
-    if (variance > maxVariance) {
-      maxVariance = variance;
-      threshold = value;
-    }
+  const clipCount = Math.floor(total * 0.005);
+  let low = 0;
+  let high = 255;
+  let cumulative = 0;
+  for (; low < 255; low++) {
+    cumulative += histogram[low];
+    if (cumulative > clipCount) break;
   }
-
+  cumulative = 0;
+  for (; high > 0; high--) {
+    cumulative += histogram[high];
+    if (cumulative > clipCount) break;
+  }
+  if (high <= low) return;
+  const range = high - low;
   for (let i = 0; i < pixels.length; i += 4) {
-    const gray = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
-    const value = gray > threshold ? 255 : 0;
-    pixels[i] = value;
-    pixels[i + 1] = value;
-    pixels[i + 2] = value;
+    const luminance = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+    const adjusted = Math.max(0, Math.min(255, (luminance - low) * 255 / range));
+    const change = adjusted - luminance;
+    pixels[i] += change;
+    pixels[i + 1] += change;
+    pixels[i + 2] += change;
   }
   ctx.putImageData(imageData, 0, 0);
 }
 
-function applySharpen(ctx: CanvasRenderingContext2D, w: number, h: number) {
+function applyPaperWhitening(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const pixels = imageData.data;
+  for (let i = 0; i < pixels.length; i += 4) {
+    const gray = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+    const amount = Math.max(0, Math.min(1, (gray - 170) / 75));
+    const smoothAmount = amount * amount * (3 - 2 * amount);
+    const whitened = gray + (255 - gray) * 0.82 * smoothAmount;
+    pixels[i] = whitened;
+    pixels[i + 1] = whitened;
+    pixels[i + 2] = whitened;
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function applyPhotocopyEnhancement(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  applyShadowRemoval(ctx, w, h);
+  applyGrayscale(ctx, w, h);
+  applyAutoContrast(ctx, w, h);
+  applySharpen(ctx, w, h, 0.2);
+  applyPaperWhitening(ctx, w, h);
+}
+
+function applySharpen(ctx: CanvasRenderingContext2D, w: number, h: number, strength = 0.3) {
   const imageData = ctx.getImageData(0, 0, w, h);
   const source = imageData.data;
   const output = new Uint8ClampedArray(source);
@@ -169,14 +236,21 @@ function applySharpen(ctx: CanvasRenderingContext2D, w: number, h: number) {
       const index = (y * w + x) * 4;
       for (let channel = 0; channel < 3; channel++) {
         let sum = 0;
+        let min = 255;
+        let max = 0;
         let kernelIndex = 0;
         for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
             const neighbor = ((y + dy) * w + x + dx) * 4 + channel;
-            sum += source[neighbor] * kernel[kernelIndex++];
+            const value = source[neighbor];
+            min = Math.min(min, value);
+            max = Math.max(max, value);
+            sum += value * kernel[kernelIndex++];
           }
         }
-        output[index + channel] = sum;
+        const sharpened = source[index + channel] +
+          (sum - source[index + channel]) * strength;
+        output[index + channel] = Math.max(min, Math.min(max, sharpened));
       }
     }
   }
@@ -193,82 +267,40 @@ const FILTERS: {
   {
     id: "none",
     label: "Original",
-    desc: "No filter",
+    desc: "No change",
     icon: <CircleDot className="h-4 w-4" />,
     apply: () => {},
   },
   {
-    id: "vivid-light",
-    label: "Vivit Light",
-    desc: "Brighten the image and lift its colors",
+    id: "auto-enhance",
+    label: "Auto Enhance",
+    desc: "Denoise, remove shadows, balance contrast, and gently sharpen",
     icon: <Sun className="h-4 w-4" />,
-    apply: (ctx, w, h) => applyTone(ctx, w, h, { brightness: 12, contrast: 1.06, saturation: 1.12 }),
-  },
-  {
-    id: "contrast-bw",
-    label: "Contrast B&W",
-    desc: "Monochrome with stronger tonal contrast",
-    icon: <Contrast className="h-4 w-4" />,
-    apply: (ctx, w, h) => applyGrayscale(ctx, w, h, 1.65),
-  },
-  {
-    id: "vibrant",
-    label: "Vibrant",
-    desc: "Boost color intensity and contrast",
-    icon: <Droplets className="h-4 w-4" />,
-    apply: (ctx, w, h) => applyTone(ctx, w, h, { contrast: 1.08, saturation: 1.55 }),
-  },
-  {
-    id: "solt-tone",
-    label: "Solt Tone",
-    desc: "Add a soft, warm vintage tone",
-    icon: <Sun className="h-4 w-4" />,
-    apply: (ctx, w, h) => applyTone(ctx, w, h, { brightness: 3, contrast: 0.94, saturation: 0.7, warmth: 14 }),
-  },
-  {
-    id: "sharp-black",
-    label: "Sharp Black",
-    desc: "Sharpen edges and deepen monochrome contrast",
-    icon: <Contrast className="h-4 w-4" />,
     apply: (ctx, w, h) => {
-      applySharpen(ctx, w, h);
-      applyGrayscale(ctx, w, h, 1.45);
+      applyDenoise(ctx, w, h);
+      applyShadowRemoval(ctx, w, h);
+      applyAutoContrast(ctx, w, h);
+      applySharpen(ctx, w, h, 0.25);
     },
   },
   {
-    id: "bw",
-    label: "B&W",
-    desc: "Classic smooth black and white",
-    icon: <Type className="h-4 w-4" />,
-    apply: (ctx, w, h) => applyGrayscale(ctx, w, h),
-  },
-  {
-    id: "carbon-black",
-    label: "Carbon Black",
-    desc: "Deep blacks with crisp grayscale detail",
+    id: "grayscale-scan",
+    label: "Grayscale",
+    desc: "Grayscale with shadow removal, contrast, and sharpening",
     icon: <Contrast className="h-4 w-4" />,
-    apply: (ctx, w, h) => applyGrayscale(ctx, w, h, 1.55, -8),
+    apply: (ctx, w, h) => {
+      applyShadowRemoval(ctx, w, h);
+      applyGrayscale(ctx, w, h);
+      applyAutoContrast(ctx, w, h);
+      applySharpen(ctx, w, h, 0.3);
+    },
   },
   {
-    id: "ocv-black",
-    label: "OCVBlack",
-    desc: "Thresholded monochrome for clean black and white",
+    id: "bw-photocopy",
+    label: "B&W Photocopy",
+    desc: "Grayscale detail with enhanced text and a cleaner white paper background",
     icon: <Type className="h-4 w-4" />,
-    apply: applyThresholdBlackAndWhite,
-  },
-  {
-    id: "gray",
-    label: "Gray",
-    desc: "Soft, low-contrast grayscale",
-    icon: <CircleDot className="h-4 w-4" />,
-    apply: (ctx, w, h) => applyGrayscale(ctx, w, h, 0.82, 8),
-  },
-  {
-    id: "color-pop",
-    label: "Color Pop",
-    desc: "Make vivid colors stand out from neutral tones",
-    icon: <Wand2 className="h-4 w-4" />,
-    apply: (ctx, w, h) => applyTone(ctx, w, h, { contrast: 1.04, saturation: 1.9 }),
+    apply: applyPhotocopyEnhancement,
   },
 ];
 
@@ -1755,15 +1787,6 @@ export default function ImageEditor({
                 </div>
               </Section>
 
-              <Divider />
-
-              <button
-                onClick={resetAll}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-50"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                Reset all changes
-              </button>
               </div>
             </div>
             <div
